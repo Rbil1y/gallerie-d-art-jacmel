@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(node -v)",
+      "Shell(npm:*)",
+      "powershell",
+      "Shell(npx vite --port 5177 --host > .vite.log 2>&1 & echo $!)",
+      "Shell(cat .vite.log 2>&1; echo \"---\"; curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5177/ 2>&1; echo \"\"; ps aux 2>&1 | head -n 20)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

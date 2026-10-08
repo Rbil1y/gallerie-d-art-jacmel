@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react'
 import { motion, AnimatePresence, useScroll, useTransform, useSpring, useReducedMotion, useMotionValue, type MotionValue } from 'motion/react'
 import Lenis from 'lenis'
-import { artworks, artists, journal, hours, expo, manifesto, stats, openState, type Artwork } from './data'
+import { artworks, artists, journal, hours, expo, manifesto, stats, openState, IMG, type Artwork } from './data'
 
 /* ============================== utils ============================== */
 
@@ -187,7 +187,7 @@ function Preloader({ onDone }: { onDone: () => void }) {
   }
   useEffect(() => {
     /* fire-and-forget: images warm the cache but NEVER block the counter */
-    ;['/img/hero-salle.jpg', '/img/art-baie.jpg', '/img/k6.jpg', '/img/art-totem.jpg', '/img/art-femme.jpg', '/img/k4.jpg'].forEach(s => {
+    ;[IMG + 'hero-salle.jpg', IMG + 'art-baie.jpg', IMG + 'k6.jpg', IMG + 'art-totem.jpg', IMG + 'art-femme.jpg', IMG + 'k4.jpg'].forEach(s => {
       const im = new Image()
       im.src = s
     })
@@ -579,7 +579,7 @@ export default function App() {
                 <motion.span className="ha-chip" style={{ x: driftX, y: driftY }}
                   initial={{ opacity: 0, scale: 0.7, rotate: -8 }} animate={{ opacity: loading ? 0 : 1, scale: loading ? 0.7 : 1, rotate: loading ? -8 : 0 }}
                   transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 1.1 }}>
-                  <img src="/img/k6.jpg" alt="" />
+                  <img src={IMG + 'k6.jpg'} alt="" />
                   <span className="ha-chip-cap mono">Kanaval ’14</span>
                 </motion.span>
               </motion.span>
@@ -588,7 +588,7 @@ export default function App() {
                 <motion.span className="ha-inimg" style={{ x: driftX2, y: driftY2 }}
                   initial={{ opacity: 0, scaleX: 0 }} animate={{ opacity: loading ? 0 : 1, scaleX: loading ? 0 : 1 }}
                   transition={{ duration: 1, ease: [0.76, 0, 0.24, 1], delay: 1.05 }}>
-                  <img src="/img/art-baie.jpg" alt="" />
+                  <img src={IMG + 'art-baie.jpg'} alt="" />
                 </motion.span>
               </motion.span>
               <motion.span className="ha-line ha-l3" style={{ y: heroTitleY, opacity: heroFade }} aria-hidden>
@@ -612,7 +612,7 @@ export default function App() {
               initial={{ opacity: 0 }} animate={{ opacity: loading ? 0 : 1 }} transition={{ duration: 0.5, delay: 1.1 }}>
               <Clip delay={0.15}>
                 <div className="hero-media">
-                  <motion.img src="/img/hero-salle.jpg" alt="Salle d’exposition de la maison, rue Barranquilla"
+                  <motion.img src={IMG + 'hero-salle.jpg'} alt="Salle d’exposition de la maison, rue Barranquilla"
                     style={{ y: heroImgY, scale: 1.18 }} />
                   <div className="hero-stamp" aria-hidden>
                     <svg viewBox="0 0 100 100"><defs><path id="circ" d="M50,50 m-38,0 a38,38 0 1,1 76,0 a38,38 0 1,1 -76,0" /></defs>

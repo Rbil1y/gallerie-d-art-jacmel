@@ -4,13 +4,21 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/build-images.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/build-images.mjs",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "images": "node scripts/build-images.mjs",
+    "photos:fetch": "node scripts/fetch-commons.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
-    "motion": "^12.23.0",
+    "@fontsource-variable/besley": "^5.3.0",
+    "@fontsource-variable/hanken-grotesk": "^5.3.0",
+    "@fontsource-variable/newsreader": "^5.3.0",
     "lenis": "^1.3.8",
+    "motion": "^12.23.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
@@ -18,7 +26,9 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.5.2",
+    "sharp": "^0.35.5",
     "typescript": "^5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^5.0.3"
   }
 }

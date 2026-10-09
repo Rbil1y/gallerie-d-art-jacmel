@@ -20,3 +20,7 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# images générées (npm run images : assets/photos → public/img/gen)
+public/img/gen/
+src/content/images.gen.json

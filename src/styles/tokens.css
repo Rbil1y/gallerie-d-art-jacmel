@@ -1,0 +1,110 @@
+/* ============================================================
+   Gallerie d’art de Jacmel — « La maison aux persiennes »
+   Jetons : mur blanc de galerie, encre, point rouge.
+   La nuit : indigo de Saint-Domingue et lampes de tableau.
+   ============================================================ */
+
+@property --slat-open {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+
+:root {
+  --font-voice: 'Newsreader Variable', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --font-ui: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sign: 'Besley Variable', 'Rockwell', Georgia, serif;
+
+  /* — jour — */
+  --wall: #f9f8f5;
+  --wall-shade: #f0eee9;
+  --wall-terre: #f8f4ee;
+  --wall-mer: #f3f6f6;
+  --paper: #ffffff;
+  --ink: #1a1714;
+  --ink-2: #4a443d;
+  --ink-3: #6b645b;
+  --hair: rgb(26 23 20 / 0.12);
+  --hair-2: rgb(26 23 20 / 0.26);
+  --rouge: #d21034;
+  --rouge-ink: #ffffff;
+  --glass: rgb(249 248 245 / 0.72);
+  --glass-edge: rgb(255 255 255 / 0.6);
+  --scrim: rgb(24 20 16 / 0.36);
+  --lamp: #ffd9a0;
+  --brass: #b08a4a;
+  --persienne: #2e8c86;
+  --persienne-hi: #46a59d;
+  --persienne-lo: #1b5c58;
+  --paint: #f3ebdc;
+  --stage-ink: #f4f0e7;
+
+  /* — lumière (réécrite en direct par LightProvider) — */
+  --sun-day: 1;
+  --sun-warm: 0.3;
+  --light-rgb: 255 240 214;
+  --light-alpha: 0.8;
+  --light-angle: -22deg;
+  --light-x: 2%;
+  --light-stretch: 1.4;
+  --light-slat: 40px;
+  --shadow-x: 16px;
+  --shadow-y: 12px;
+  --shadow-blur: 28px;
+  --shadow-alpha: 0.24;
+
+  /* — mouvement — */
+  --hinge: cubic-bezier(0.7, 0, 0.2, 1);
+  --settle: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --out: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-micro: 160ms;
+  --t-ui: 320ms;
+  --t-reveal: 640ms;
+  --t-door: 1100ms;
+  --t-light: 2.4s;
+
+  /* — typographie — */
+  --fs-monument: clamp(4.6rem, 1.4rem + 12.6vw, 15.5rem);
+  --fs-h1: clamp(3rem, 1.25rem + 6.4vw, 8.75rem);
+  --fs-h2: clamp(2.4rem, 1.35rem + 3.7vw, 5.4rem);
+  --fs-h3: clamp(1.55rem, 1.15rem + 1.35vw, 2.5rem);
+  --fs-lead: clamp(1.22rem, 1.04rem + 0.72vw, 1.72rem);
+  --fs-body: 1.125rem;
+  --fs-ui: 0.9375rem;
+  --fs-small: 0.8125rem;
+  --fs-label: 0.75rem;
+
+  /* — espace — */
+  --gutter: clamp(16px, 4.2vw, 72px);
+  --maxw: 1640px;
+  --header-h: 64px;
+  --section: clamp(104px, 13vw, 216px);
+  --dock-h: 0px;
+}
+
+:root[data-theme='nuit'] {
+  --wall: #0e1430;
+  --wall-shade: #0b1029;
+  --wall-terre: #12152e;
+  --wall-mer: #0c1534;
+  --paper: #151b3a;
+  --ink: #eee9de;
+  --ink-2: #cbc4b7;
+  --ink-3: #a49e92;
+  --hair: rgb(238 233 222 / 0.13);
+  --hair-2: rgb(238 233 222 / 0.3);
+  --rouge: #ff3b5c;
+  --glass: rgb(14 20 48 / 0.72);
+  --glass-edge: rgb(255 255 255 / 0.08);
+  --scrim: rgb(3 5 14 / 0.6);
+  --persienne: #24706b;
+  --persienne-hi: #2f8580;
+  --persienne-lo: #123f3c;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --header-h: 56px;
+    --dock-h: calc(64px + env(safe-area-inset-bottom));
+  }
+}

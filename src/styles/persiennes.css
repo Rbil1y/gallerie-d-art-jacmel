@@ -1,0 +1,1031 @@
+/* ============================================================
+   La maison aux persiennes : façade, porte-fenêtre, lames.
+   Unité de menuiserie : --p, le pas d’une lame. Toute la porte en découle.
+   Hauteur d’une baie : 42,5 p (dormant 1,2 · imposte 5,2 · traverse 1,3 · battant 34,4 · seuil 0,4).
+   ============================================================ */
+
+.doors {
+  --open: 0;
+  --louver: 0;
+  --latch: 0;
+  --t-latch: 380ms;
+  --t-louver: 900ms;
+  --t-swing: 1700ms;
+  --swing: cubic-bezier(0.58, 0.03, 0.24, 1);
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  container-type: size;
+  pointer-events: none;
+}
+
+.doors__stage {
+  --door-h: 74cqh;
+  --door-w: min(88cqw, calc(var(--door-h) * 0.78));
+  --door-top: 18cqh;
+  --door-bottom: calc(var(--door-top) + var(--door-h));
+  --door-l: calc(50% - var(--door-w) / 2);
+  --door-r: calc(50% + var(--door-w) / 2);
+  --gap: calc(var(--door-w) * 0.42);
+  --p: calc(var(--door-h) / 42.5);
+  --depth: calc(var(--p) * 4.4);
+  --persp: calc(var(--door-h) * 1.9);
+  --tile: calc(var(--p) * 30);
+  --tile-enduit: calc(var(--p) * 40);
+
+  --enduit: url('../assets/textures/enduit.webp');
+  --fil-h: url('../assets/textures/peinture-h.webp');
+  --fil-v: url('../assets/textures/peinture-v.webp');
+  --mur: #eedcb6;
+  --pierre: #efe4cd;
+  --badigeon: linear-gradient(rgb(238 228 208 / 0.46) 0 0);
+  --dalle: #c8bea9;
+  --patine: linear-gradient(rgb(200 190 170 / 0.5) 0 0);
+  --creme: linear-gradient(rgb(238 228 208 / 0.87) 0 0);
+
+  /* la nuit et l’heure dorée se posent sur chaque matière, jamais sur la lumière des lampes */
+  --teinte: calc((1 - var(--sun-day)) * 74%);
+  --matiere:
+    linear-gradient(rgb(9 15 44 / calc((1 - var(--sun-day)) * 0.74)) 0 0),
+    linear-gradient(rgb(255 150 70 / calc(var(--sun-warm) * var(--sun-day) * 0.16)) 0 0);
+  --bois: color-mix(in oklab, var(--persienne), #090f2c var(--teinte));
+  --bois-clair: color-mix(in oklab, var(--persienne-hi), #090f2c var(--teinte));
+  --bois-sombre: color-mix(in oklab, var(--persienne-lo), #090f2c var(--teinte));
+  --ombre-portee: rgb(26 17 8 / calc(0.14 + var(--sun-day) * 0.3));
+  --vitre:
+    linear-gradient(112deg, transparent 22%, rgb(255 255 255 / 0.2) 30%, transparent 40%, transparent 62%, rgb(255 255 255 / 0.1) 68%, transparent 74%),
+    linear-gradient(176deg, #a9c0c6 0%, #71909b 44%, #3f525e 100%);
+  --interieur: rgb(20 14 10 / 0.5);
+
+  position: absolute;
+  inset: 0;
+  perspective: var(--persp);
+  perspective-origin: 50% 50%; /* l’œil vise le centre du tableau, de l’autre côté de la porte */
+}
+[data-theme='nuit'] .doors__stage {
+  --vitre: radial-gradient(ellipse 60% 120% at 50% 100%, #ffdca0 0%, #eaa654 56%, #9c5f28 100%);
+  --interieur: radial-gradient(ellipse 72% 62% at 50% 46%, rgb(255 208 142 / 0.94), rgb(198 130 64 / 0.9) 58%, rgb(86 48 20 / 0.94));
+}
+
+.doors__scene {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: translateZ(calc(var(--open) * var(--persp) * 0.84));
+  transition: transform var(--t-swing) cubic-bezier(0.62, 0.02, 0.34, 1) 90ms;
+  will-change: transform;
+}
+:where(.doors__scene span) {
+  display: block;
+}
+
+/* ---------- le mur ---------- */
+.doors__wall {
+  position: absolute;
+  inset: 0;
+  background:
+    var(--matiere),
+    radial-gradient(ellipse 85% 75% at calc(50% - var(--sun-x) * 34%) 6%, rgb(var(--light-rgb) / calc(var(--sun-day) * 0.3)), transparent 72%),
+    linear-gradient(180deg, rgb(24 16 8 / 0.42) 0, rgb(24 16 8 / 0.12) 3.4cqh, transparent 8cqh),
+    var(--enduit) 0 0 / var(--tile-enduit),
+    var(--mur);
+  background-blend-mode: normal, normal, normal, normal, multiply;
+  clip-path: polygon(
+    evenodd,
+    0 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 0,
+    var(--door-l) var(--door-top),
+    var(--door-r) var(--door-top),
+    var(--door-r) var(--door-bottom),
+    var(--door-l) var(--door-bottom),
+    var(--door-l) var(--door-top)
+  );
+}
+.doors__plinth {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 16cqh;
+  background:
+    var(--matiere),
+    linear-gradient(180deg, rgb(255 255 255 / 0.2) 0, rgb(255 255 255 / 0.2) 0.5cqh, rgb(30 20 10 / 0.3) 0.5cqh, transparent 1.6cqh),
+    linear-gradient(0deg, rgb(36 26 16 / 0.58), rgb(36 26 16 / 0.08) 60%, transparent),
+    var(--enduit) -310px -80px / var(--tile-enduit),
+    #bba884;
+  background-blend-mode: normal, normal, normal, normal, multiply;
+}
+
+/* ---------- encadrement de pierre enduite, linteau, clef ---------- */
+.doors__surround {
+  --s: calc(var(--p) * 2);
+  position: absolute;
+  top: calc(var(--s) * -1.2);
+  left: calc(var(--s) * -1);
+  right: calc(var(--s) * -1);
+  bottom: 0;
+  background:
+    var(--matiere),
+    linear-gradient(90deg, rgb(255 255 255 / 0.18), transparent 3%, transparent 97%, rgb(40 28 14 / 0.2)),
+    var(--badigeon),
+    var(--enduit) -140px -220px / var(--tile-enduit),
+    var(--pierre);
+  background-blend-mode: normal, normal, normal, normal, normal, multiply;
+  box-shadow:
+    0 0 0 1px rgb(60 46 28 / 0.42),
+    calc(var(--shadow-x) * 0.3) calc(var(--shadow-y) * 0.36) calc(var(--p) * 0.5) var(--ombre-portee);
+}
+.doors__surround--main {
+  top: calc(var(--door-top) - var(--s) * 1.2);
+  left: calc(var(--door-l) - var(--s));
+  right: auto;
+  bottom: auto;
+  width: calc(var(--door-w) + var(--s) * 2);
+  height: calc(var(--door-h) + var(--s) * 1.2);
+}
+/* la corniche du linteau, puis la clef */
+.doors__surround::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--p) * -0.9);
+  left: calc(var(--p) * -0.8);
+  right: calc(var(--p) * -0.8);
+  height: calc(var(--p) * 1.25);
+  background:
+    var(--matiere),
+    linear-gradient(180deg, rgb(255 255 255 / 0.55) 0, rgb(255 255 255 / 0.1) 26%, rgb(40 28 14 / 0.12) 62%, rgb(40 28 14 / 0.42) 100%),
+    var(--badigeon),
+    var(--enduit) -40px -420px / var(--tile-enduit),
+    var(--pierre);
+  background-blend-mode: normal, normal, normal, normal, normal, multiply;
+  box-shadow: calc(var(--shadow-x) * 0.3) calc(var(--p) * 0.42) calc(var(--p) * 0.4) var(--ombre-portee);
+}
+.doors__surround::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--p) * 0.1);
+  left: 50%;
+  width: calc(var(--p) * 3.6);
+  height: calc(var(--p) * 2.5);
+  margin-left: calc(var(--p) * -1.8);
+  clip-path: polygon(0 0, 100% 0, 80% 100%, 20% 100%);
+  background:
+    var(--matiere),
+    linear-gradient(100deg, rgb(255 255 255 / 0.3), transparent 42%, rgb(40 28 14 / 0.24)),
+    var(--badigeon),
+    var(--enduit) -520px -90px / var(--tile-enduit),
+    var(--pierre);
+  background-blend-mode: normal, normal, normal, normal, normal, multiply;
+}
+
+/* ---------- marches ---------- */
+.doors__step {
+  position: absolute;
+  left: 50%;
+  background:
+    var(--matiere),
+    linear-gradient(180deg, rgb(255 255 255 / 0.2) 0, transparent 44%, rgb(255 255 255 / 0.36) 44%, rgb(255 255 255 / 0.36) 47%, rgb(26 18 10 / 0.3) 47%, rgb(26 18 10 / 0.5) 100%),
+    var(--patine),
+    var(--enduit) -60px -700px / var(--tile-enduit),
+    var(--dalle);
+  background-blend-mode: normal, normal, normal, normal, normal, multiply;
+  box-shadow:
+    0 0 0 1px rgb(40 30 20 / 0.3),
+    calc(var(--shadow-x) * 0.3) 0 calc(var(--p) * 0.6) rgb(26 17 8 / 0.26);
+}
+.doors__step--1 {
+  z-index: 2;
+  top: var(--door-bottom);
+  width: calc(var(--door-w) * 1.24);
+  height: 4.1cqh;
+  margin-left: calc(var(--door-w) * -0.62);
+}
+.doors__step--2 {
+  z-index: 1;
+  top: calc(var(--door-bottom) + 4.1cqh);
+  bottom: 0;
+  width: calc(var(--door-w) * 1.52);
+  margin-left: calc(var(--door-w) * -0.76);
+}
+
+/* ---------- plaque de rue, lanternes ---------- */
+.doors__plaque {
+  position: absolute;
+  right: calc(var(--door-r) + var(--p) * 2 + (var(--gap) - var(--p) * 4) / 2);
+  top: 40cqh;
+  transform: translateX(50%);
+  padding: calc(var(--p) * 0.42) calc(var(--p) * 0.8);
+  border-radius: calc(var(--p) * 0.22);
+  font-family: var(--font-ui);
+  font-size: calc(var(--p) * 0.82);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+  color: color-mix(in oklab, #f3efe4, #090f2c var(--teinte));
+  background:
+    radial-gradient(circle at 92% 86%, #6d6455 0, #6d6455 2.2%, transparent 3%),
+    linear-gradient(160deg, rgb(255 255 255 / 0.18), transparent 34%),
+    color-mix(in oklab, #1d2a5e, #090f2c var(--teinte));
+  box-shadow:
+    inset 0 0 0 calc(var(--p) * 0.09) color-mix(in oklab, #f3efe4, #090f2c var(--teinte)),
+    inset 0 0 0 calc(var(--p) * 0.16) rgb(0 0 0 / 0.3),
+    calc(var(--shadow-x) * 0.14) calc(var(--shadow-y) * 0.16) calc(var(--p) * 0.22) var(--ombre-portee);
+}
+.doors__plaque small {
+  display: block;
+  font-size: 0.68em;
+  letter-spacing: 0.2em;
+  opacity: 0.9;
+}
+.doors__lantern {
+  position: absolute;
+  top: 21cqh;
+  width: calc(var(--p) * 3.7);
+  height: calc(var(--p) * 6.94);
+  background: url('../assets/doors/lanterne.svg') center / 100% 100% no-repeat;
+  filter: drop-shadow(calc(var(--shadow-x) * 0.26) calc(var(--shadow-y) * 0.3) calc(var(--p) * 0.16) rgb(20 12 4 / calc(var(--sun-day) * 0.5)));
+}
+.doors__lantern--l {
+  right: calc(var(--door-r) + var(--p) * 2 + (var(--gap) - var(--p) * 4) / 2);
+  transform: translateX(50%);
+}
+.doors__lantern--r {
+  left: calc(var(--door-r) + var(--p) * 2 + (var(--gap) - var(--p) * 4) / 2);
+  transform: translateX(-50%);
+}
+.doors__lantern::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: url('../assets/doors/lanterne-vitre.svg') center / 100% 100% no-repeat;
+  opacity: calc(1 - var(--sun-day));
+}
+.doors__lantern-glow {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 56%;
+  width: calc(var(--p) * 46);
+  height: calc(var(--p) * 46);
+  margin: calc(var(--p) * -23) 0 0 calc(var(--p) * -23);
+  background: radial-gradient(closest-side, rgb(255 206 132 / 0.5), rgb(255 186 104 / 0.2) 34%, rgb(255 176 92 / 0.06) 66%, transparent);
+  opacity: calc(1 - var(--sun-day));
+}
+
+/* ---------- l’enseigne peinte ---------- */
+.doors__sign {
+  --board: min(94cqw, calc(var(--door-w) * 1.2));
+  position: absolute;
+  z-index: 4;
+  top: 1.7cqh;
+  left: 50%;
+  width: var(--board);
+  height: 12.2cqh;
+  margin-left: calc(var(--board) / -2);
+  display: grid;
+  place-items: center;
+  background:
+    var(--matiere),
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 18%, transparent 82%, rgb(0 0 0 / 0.26)),
+    repeating-linear-gradient(180deg, transparent 0, transparent calc(33.33% - 1px), rgb(0 0 0 / 0.44) calc(33.33% - 1px), rgb(0 0 0 / 0.44) 33.33%),
+    linear-gradient(rgb(11 42 40 / 0.68) 0 0),
+    var(--fil-h) -80px -210px / var(--tile);
+  box-shadow:
+    0 0 0 1px rgb(12 26 24 / 0.7),
+    inset 0 0 0 calc(var(--p) * 0.16) var(--bois),
+    calc(var(--shadow-x) * 0.4) calc(var(--p) * 0.5 + var(--shadow-y) * 0.3) calc(var(--p) * 0.55) rgb(26 17 8 / calc(0.2 + var(--sun-day) * 0.34));
+}
+.doors__sign::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--p) * 0.42);
+  border: 1px solid rgb(243 235 220 / 0.34);
+}
+.doors__sign::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--p) * -0.34);
+  left: calc(var(--p) * -0.5);
+  right: calc(var(--p) * -0.5);
+  height: calc(var(--p) * 0.44);
+  background: linear-gradient(180deg, var(--bois-clair), var(--bois) 56%, var(--bois-sombre));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+}
+.doors__paint {
+  display: grid;
+  justify-items: center;
+  gap: 0.12em;
+  font-size: min(calc(var(--board) * 0.84 / var(--chars) / 0.78), 4.9cqh);
+  color: var(--paint);
+  text-align: center;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.6 2.45'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.6 2.45'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.sign__main {
+  font-family: var(--font-sign);
+  font-weight: 900;
+  font-size: 1em;
+  line-height: 1;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow:
+    0.022em 0.03em 0 #c48f3f,
+    0.044em 0.06em 0 #7c5620,
+    0.06em 0.09em 0.03em rgb(0 0 0 / 0.42);
+}
+.sign__script {
+  font-family: var(--font-voice);
+  font-style: italic;
+  font-size: 0.5em;
+  font-variation-settings: 'opsz' 36;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+.sign__small {
+  font-family: var(--font-ui);
+  font-size: max(9px, 0.21em);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.86;
+  font-variant-numeric: lining-nums;
+}
+
+/* ---------- baies ---------- */
+.doors__bay {
+  position: absolute;
+  top: var(--door-top);
+  width: var(--door-w);
+  height: var(--door-h);
+}
+.doors__bay--live {
+  left: var(--door-l);
+  transform-style: preserve-3d;
+}
+.doors__bay--flat {
+  --p: calc(var(--door-h) / 44.5);
+}
+.doors__bay--l {
+  left: calc(var(--door-l) - var(--gap) - var(--door-w));
+}
+.doors__bay--r {
+  left: calc(var(--door-r) + var(--gap));
+}
+.doors__recess {
+  position: absolute;
+  inset: 0;
+}
+.doors__bay--flat .doors__recess {
+  inset: var(--p);
+}
+.doors__bay--live .doors__recess {
+  transform-style: preserve-3d;
+  transform: translateZ(calc(var(--depth) * -1));
+}
+
+/* ébrasement : l’épaisseur du mur */
+.doors__reveal {
+  position: absolute;
+  background:
+    var(--matiere),
+    linear-gradient(var(--dir, 90deg), transparent, rgb(14 9 4 / 0.32)),
+    linear-gradient(rgb(14 9 4 / var(--r)) 0 0),
+    var(--enduit) -200px -120px / var(--tile-enduit),
+    var(--pierre);
+  background-blend-mode: normal, normal, normal, normal, multiply;
+}
+.doors__reveal--t {
+  --r: 0.5;
+  --dir: 180deg;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--depth);
+  transform-origin: 50% 0;
+  transform: rotateX(-90deg);
+}
+.doors__reveal--b {
+  --r: 0.04;
+  --dir: 0deg;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--depth);
+  transform-origin: 50% 100%;
+  transform: rotateX(90deg);
+}
+.doors__reveal--l {
+  --r: calc(0.34 + var(--sun-x) * 0.22);
+  --dir: 90deg;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--depth);
+  transform-origin: 0 50%;
+  transform: rotateY(90deg);
+}
+.doors__reveal--r {
+  --r: calc(0.34 - var(--sun-x) * 0.22);
+  --dir: 270deg;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: var(--depth);
+  transform-origin: 100% 50%;
+  transform: rotateY(-90deg);
+}
+/* baies voisines : le même ébrasement, peint */
+.doors__recess-flat {
+  position: absolute;
+  inset: 0;
+  border: var(--p) solid;
+  border-color: color-mix(in oklab, #6a5c45, #090f2c var(--teinte)) color-mix(in oklab, #c2b394, #090f2c var(--teinte)) color-mix(in oklab, #dacfba, #090f2c var(--teinte))
+    color-mix(in oklab, #85765b, #090f2c var(--teinte));
+}
+.doors__interior {
+  position: absolute;
+  inset: 0;
+  background: var(--interieur);
+  opacity: calc(1 - var(--open) * 1.5);
+  /* au-delà de la course des battants, agrandi : le mur en masque les bords */
+  transform: translateZ(calc(var(--door-w) * -0.62)) scale(2.4);
+  transition: opacity calc(var(--t-swing) * 0.7) ease;
+}
+
+/* ombre du linteau et du tableau sur la menuiserie, selon le soleil du moment */
+.doors__cast {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset calc(var(--shadow-x) * 1.6) calc(var(--shadow-y) * 2.3) calc(var(--p) * 0.7) calc(var(--p) * -0.1) rgb(8 10 14 / calc(var(--sun-day) * 0.58));
+}
+.doors__bay--live .doors__cast {
+  transform: translateZ(calc(var(--p) * 1.7));
+  opacity: calc(1 - var(--open) * 5);
+  transition: opacity 0.3s ease;
+}
+
+/* ---------- dormant, imposte ---------- */
+.doors__dormant {
+  position: absolute;
+  inset: 0;
+}
+.doors__bay--live .doors__dormant {
+  transform: translateZ(calc(var(--p) * 0.2));
+}
+.doors__head,
+.doors__bar,
+.doors__threshold,
+.doors__jamb {
+  position: absolute;
+}
+.doors__head,
+.doors__bar,
+.doors__threshold {
+  left: 0;
+  right: 0;
+  background: var(--matiere), linear-gradient(180deg, rgb(255 255 255 / 0.3), transparent 22%, transparent 74%, rgb(30 22 12 / 0.34)), var(--creme), var(--fil-h) -30px -340px / var(--tile);
+}
+.doors__head {
+  top: 0;
+  height: calc(var(--p) * 1.2);
+}
+.doors__bar {
+  top: calc(var(--p) * 6.4);
+  height: calc(var(--p) * 1.3);
+  box-shadow: 0 calc(var(--p) * 0.28) calc(var(--p) * 0.34) rgb(8 10 14 / 0.46);
+}
+.doors__threshold {
+  bottom: 0;
+  height: calc(var(--p) * 0.4);
+}
+.doors__jamb {
+  top: 0;
+  bottom: 0;
+  width: calc(var(--p) * 1.2);
+  background: var(--matiere), linear-gradient(90deg, rgb(255 255 255 / 0.28), transparent 20%, transparent 76%, rgb(30 22 12 / 0.36)), var(--creme), var(--fil-v) -190px -80px / var(--tile);
+}
+.doors__jamb--l {
+  left: 0;
+}
+.doors__jamb--r {
+  right: 0;
+}
+.doors__transom {
+  position: absolute;
+  top: calc(var(--p) * 1.2);
+  left: calc(var(--p) * 1.2);
+  right: calc(var(--p) * 1.2);
+  height: calc(var(--p) * 5.2);
+  background: url('../assets/doors/imposte-volute.svg') 50% 100% / auto 100% repeat-x, var(--vitre);
+  box-shadow:
+    inset 0 calc(var(--p) * 0.5) calc(var(--p) * 0.5) rgb(8 10 14 / 0.42),
+    inset 0 0 0 1px rgb(10 8 6 / 0.7);
+}
+.doors__transom-sun {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  height: 100%;
+  aspect-ratio: 180 / 78;
+  transform: translateX(-50%);
+  background: url('../assets/doors/imposte-soleil.svg') center / 100% 100% no-repeat, var(--vitre);
+}
+.doors__hinge {
+  position: absolute;
+  top: calc(var(--p) * var(--y));
+  width: calc(var(--p) * 0.52);
+  height: calc(var(--p) * 3.1);
+  border-radius: calc(var(--p) * 0.12);
+  background:
+    linear-gradient(180deg, transparent 49%, rgb(0 0 0 / 0.85) 49%, rgb(0 0 0 / 0.85) 51%, transparent 51%),
+    linear-gradient(90deg, #14120f, #4f4a42 26%, #8d877b 40%, #2c2925 66%, #0d0c0a);
+  box-shadow: calc(var(--shadow-x) * 0.08) calc(var(--shadow-y) * 0.1) calc(var(--p) * 0.14) rgb(0 0 0 / 0.5);
+}
+.doors__hinge::before,
+.doors__hinge::after {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: calc(var(--p) * 0.42);
+  border-radius: 50%;
+  background: linear-gradient(90deg, #14120f, #66625a 36%, #1a1815);
+}
+.doors__hinge::before {
+  top: calc(var(--p) * -0.32);
+}
+.doors__hinge::after {
+  bottom: calc(var(--p) * -0.32);
+}
+.doors__hinge--l {
+  left: calc(var(--p) * 0.96);
+}
+.doors__hinge--r {
+  right: calc(var(--p) * 0.96);
+}
+
+/* ---------- battants ---------- */
+.doors__leaves {
+  position: absolute;
+  top: calc(var(--p) * 7.7);
+  left: calc(var(--p) * 1.2);
+  right: calc(var(--p) * 1.2);
+  height: calc(var(--p) * 34.4);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.doors__leaf {
+  --st-h: calc(var(--p) * 1.6);
+  --st-m: calc(var(--p) * 1.95);
+  position: relative;
+  background: #17110c;
+}
+.doors__leaf--l {
+  --ins-l: var(--st-h);
+  --ins-r: var(--st-m);
+}
+.doors__leaf--r {
+  --ins-l: var(--st-m);
+  --ins-r: var(--st-h);
+}
+.doors__louvers,
+.doors__carcass {
+  position: absolute;
+  inset: 0;
+}
+
+/* lames : un plan rectiligne, ombré par la lame du dessus, nez arrondi en bas */
+.doors__panel,
+.doors__bead {
+  position: absolute;
+  left: var(--ins-l);
+  right: var(--ins-r);
+}
+.doors__panel {
+  display: flex;
+  flex-direction: column;
+}
+.doors__panel--haut,
+.doors__bead--haut {
+  top: calc(var(--p) * 1.6);
+  height: calc(var(--p) * 15);
+}
+.doors__panel--bas,
+.doors__bead--bas {
+  top: calc(var(--p) * 18.8);
+  height: calc(var(--p) * 7);
+}
+.doors__slat {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  --ombre-lame: linear-gradient(180deg, rgb(4 18 18 / 0.66) 0, rgb(4 18 18 / 0.34) 9%, rgb(4 18 18 / 0.08) 30%, transparent 44%, rgb(255 255 255 / 0.06) 80%, rgb(255 255 255 / 0.2) 91%, rgb(255 255 255 / 0.08) 95%, rgb(0 0 0 / 0.34) 100%);
+}
+.doors__slat::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    var(--matiere),
+    linear-gradient(rgb(0 0 0 / var(--sh)) 0 0),
+    linear-gradient(rgb(255 255 255 / var(--hi)) 0 0),
+    var(--ombre-lame),
+    linear-gradient(rgb(42 128 122 / 0.2) 0 0),
+    var(--fil-h) calc(var(--i) * -137px) calc(var(--i) * -61px) / var(--tile);
+}
+.doors__rod {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: calc(var(--p) * 0.5);
+  bottom: calc(var(--p) * 0.5);
+  width: calc(var(--p) * 0.42);
+  margin-left: calc(var(--p) * -0.21);
+  border-radius: calc(var(--p) * 0.08);
+  background:
+    var(--matiere),
+    repeating-linear-gradient(180deg, transparent 0, transparent calc(var(--p) * 0.8), rgb(10 10 8 / 0.75) calc(var(--p) * 0.8), rgb(198 196 182 / 0.66) calc(var(--p) * 0.88), rgb(10 10 8 / 0.7) calc(var(--p) * 0.96), transparent var(--p)),
+    linear-gradient(90deg, rgb(255 255 255 / 0.22), transparent 42%, rgb(0 0 0 / 0.32)),
+    var(--fil-v) -300px -20px / var(--tile);
+  box-shadow: calc(var(--p) * 0.1) calc(var(--p) * 0.22) calc(var(--p) * 0.24) rgb(3 14 14 / 0.5);
+}
+
+/* montants et traverses : fil vertical sur les uns, horizontal sur les autres */
+.doors__stile,
+.doors__rail,
+.doors__raised,
+.doors__bead {
+  position: absolute;
+}
+.doors__stile {
+  top: 0;
+  bottom: 0;
+  background:
+    var(--matiere),
+    linear-gradient(90deg, rgb(255 255 255 / 0.17) 0, rgb(255 255 255 / 0.03) 7%, transparent 90%, rgb(0 0 0 / 0.26) 100%),
+    var(--fil-v) var(--gx, 0) var(--gy, 0) / var(--tile);
+}
+.doors__stile--hinge {
+  --gx: -90px;
+  --gy: -400px;
+  width: var(--st-h);
+}
+.doors__stile--meet {
+  --gx: -420px;
+  --gy: -130px;
+  width: var(--st-m);
+}
+.doors__leaf--l .doors__stile--hinge,
+.doors__leaf--r .doors__stile--meet {
+  left: 0;
+}
+.doors__leaf--l .doors__stile--meet,
+.doors__leaf--r .doors__stile--hinge {
+  right: 0;
+}
+.doors__leaf--r .doors__stile {
+  background-position: 0 0, 0 0, 0 0, 0 0, calc(var(--gx, 0) - 260px) calc(var(--gy, 0) - 170px);
+}
+.doors__rail {
+  left: var(--ins-l);
+  right: var(--ins-r);
+  background:
+    var(--matiere),
+    linear-gradient(180deg, rgb(255 255 255 / 0.12) 0, transparent 14%, transparent 84%, rgb(0 0 0 / 0.26) 100%),
+    var(--fil-h) var(--gx, 0) var(--gy, 0) / var(--tile);
+  /* l’assemblage à tenon : un fil d’ombre dans la peinture, une cheville de chaque côté */
+  box-shadow:
+    inset 1px 0 rgb(4 16 16 / 0.55),
+    inset -1px 0 rgb(4 16 16 / 0.55),
+    inset 2px 0 rgb(255 255 255 / 0.07),
+    inset -2px 0 rgb(255 255 255 / 0.07);
+}
+.doors__rail::before,
+.doors__rail::after {
+  content: '';
+  position: absolute;
+  top: 16%;
+  bottom: 16%;
+  width: calc(var(--p) * 0.26);
+  background: radial-gradient(circle closest-side, rgb(4 16 16 / 0.55) 0 44%, rgb(255 255 255 / 0.16) 50% 70%, transparent 78%) center top / 100% 50% repeat-y;
+}
+.doors__rail::before {
+  left: calc(var(--p) * -0.92);
+}
+.doors__rail::after {
+  right: calc(var(--p) * -0.92);
+}
+.doors__rail--top {
+  --gx: -60px;
+  --gy: -480px;
+  top: 0;
+  height: calc(var(--p) * 1.6);
+}
+.doors__rail--lock {
+  --gx: -340px;
+  --gy: -95px;
+  top: calc(var(--p) * 16.6);
+  height: calc(var(--p) * 2.2);
+}
+.doors__rail--frieze {
+  --gx: -510px;
+  --gy: -250px;
+  top: calc(var(--p) * 25.8);
+  height: calc(var(--p) * 1);
+}
+.doors__rail--bottom {
+  --gx: -150px;
+  --gy: -555px;
+  top: calc(var(--p) * 32.4);
+  height: calc(var(--p) * 2);
+  background:
+    var(--matiere),
+    linear-gradient(180deg, rgb(255 255 255 / 0.1) 0, transparent 14%, transparent 62%, rgb(24 16 8 / 0.42) 100%),
+    var(--fil-h) var(--gx, 0) var(--gy, 0) / var(--tile);
+}
+/* moulure autour des lames : face haute dans l’ombre, face basse au soleil */
+.doors__bead {
+  border: calc(var(--p) * 0.26) solid;
+  border-color: var(--bois-sombre) color-mix(in oklab, var(--bois), var(--bois-sombre) 40%) var(--bois-clair) var(--bois);
+  box-shadow:
+    0 0 0 1px rgb(3 14 14 / 0.44),
+    inset 0 calc(var(--p) * 0.7) calc(var(--p) * 0.55) calc(var(--p) * -0.2) rgb(3 14 14 / 0.62),
+    inset calc(var(--p) * 0.24) 0 calc(var(--p) * 0.3) calc(var(--p) * -0.1) rgb(3 14 14 / 0.42),
+    inset calc(var(--p) * -0.24) 0 calc(var(--p) * 0.3) calc(var(--p) * -0.1) rgb(3 14 14 / 0.42),
+    inset 0 calc(var(--p) * -0.12) calc(var(--p) * 0.2) rgb(3 14 14 / 0.34);
+}
+/* panneau à plate-bande du soubassement */
+.doors__raised {
+  left: var(--ins-l);
+  right: var(--ins-r);
+  top: calc(var(--p) * 26.8);
+  height: calc(var(--p) * 5.6);
+  border: calc(var(--p) * 1.05) solid;
+  border-color: rgb(255 255 255 / 0.17) rgb(0 0 0 / 0.14) rgb(0 0 0 / 0.36) rgb(255 255 255 / 0.05);
+  background:
+    var(--matiere),
+    linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 40%, rgb(0 0 0 / 0.1)),
+    var(--fil-h) -230px -300px / var(--tile);
+  background-origin: border-box;
+  background-clip: border-box;
+  box-shadow:
+    0 0 0 calc(var(--p) * 0.12) var(--bois-sombre),
+    0 0 0 calc(var(--p) * 0.17) rgb(3 14 14 / 0.5),
+    inset 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+.doors__leaf--r .doors__raised {
+  background-position: 0 0, 0 0, 0 0, -470px -60px;
+}
+
+.doors__shade {
+  display: none;
+}
+.doors__bay--live .doors__shade {
+  display: block;
+}
+/* couvre-joint : la baguette qui ferme la rencontre des deux battants */
+.doors__astragal {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--p) * -0.55);
+  width: calc(var(--p) * 1.1);
+  border-radius: calc(var(--p) * 0.14);
+  background:
+    var(--matiere),
+    linear-gradient(90deg, rgb(4 16 16 / 0.42), rgb(255 255 255 / 0.1) 22%, rgb(255 255 255 / 0.24) 40%, transparent 62%, rgb(4 16 16 / 0.5)),
+    var(--fil-v) -560px -310px / var(--tile);
+  box-shadow: calc(var(--shadow-x) * 0.1 + var(--p) * 0.1) 0 calc(var(--p) * 0.22) rgb(3 14 14 / 0.42);
+}
+
+/* ---------- quincaillerie ---------- */
+.doors__hardware {
+  position: absolute;
+  inset: 0;
+}
+.doors__plate,
+.doors__lever {
+  position: absolute;
+  filter: drop-shadow(calc(var(--p) * 0.05) calc(var(--p) * 0.1) calc(var(--p) * 0.07) rgb(0 0 0 / 0.6));
+}
+.doors__plate {
+  top: calc(var(--p) * 15.42);
+  width: calc(var(--p) * 1.05);
+  height: calc(var(--p) * 4.55);
+  background: linear-gradient(rgb(9 15 44 / calc((1 - var(--sun-day)) * 0.5)) 0 0), url('../assets/doors/plaque-serrure.svg') center / 100% 100% no-repeat;
+  background-blend-mode: multiply;
+  mask: url('../assets/doors/plaque-serrure.svg') center / 100% 100% no-repeat;
+}
+.doors__lever {
+  top: calc(var(--p) * 16.53);
+  width: calc(var(--p) * 3.6);
+  height: calc(var(--p) * 0.96);
+  background: url('../assets/doors/bequille.svg') center / 100% 100% no-repeat;
+}
+.doors__leaf--l .doors__plate {
+  right: calc(var(--p) * 0.725);
+}
+.doors__leaf--r .doors__plate {
+  left: calc(var(--p) * 0.725);
+}
+.doors__leaf--l .doors__lever {
+  right: calc(var(--p) * 0.77);
+  transform: scaleX(-1);
+}
+.doors__leaf--r .doors__lever {
+  left: calc(var(--p) * 0.77);
+  transform-origin: 13.33% 50%;
+  transform: rotate(calc(var(--latch) * 36deg));
+  transition: transform var(--t-latch) cubic-bezier(0.3, 0.6, 0.3, 1.25);
+}
+
+/* ---------- la baie centrale, en volume ---------- */
+/* couches préparées dès l’affichage, porte fermée : rien à redessiner quand elle s’anime */
+.doors__wall,
+.doors__palms,
+.doors__bay--live .doors__leaf,
+.doors__bay--live .doors__slat,
+.doors__bay--live .doors__slat::after,
+.doors__bay--live .doors__rod,
+.doors__bay--live .doors__recess,
+.doors__bay--live .doors__dormant,
+.doors__bay--live .doors__reveal,
+.doors__bay--live .doors__interior,
+.doors__bay--live .doors__carcass,
+.doors__bay--live .doors__hardware {
+  will-change: transform;
+}
+.doors__bay--live .doors__leaves,
+.doors__bay--live .doors__leaf,
+.doors__bay--live .doors__louvers,
+.doors__bay--live .doors__panel,
+.doors__bay--live .doors__slat {
+  transform-style: preserve-3d;
+}
+.doors__bay--live .doors__leaf {
+  background: none;
+  transition: transform var(--t-swing) var(--swing);
+}
+.doors__bay--live .doors__leaf--l {
+  transform-origin: 0 50%;
+  transform: translateZ(calc(var(--latch) * var(--p) * -0.16)) rotateY(calc(var(--open) * 100deg));
+}
+.doors__bay--live .doors__leaf--r {
+  transform-origin: 100% 50%;
+  transform: translateZ(calc(var(--latch) * var(--p) * -0.16)) rotateY(calc(var(--open) * -100deg));
+  transition-delay: 110ms;
+}
+.doors__bay--live .doors__panel {
+  transform: translateZ(calc(var(--p) * -0.9));
+}
+.doors__bay--live .doors__slat {
+  --ombre-lame: linear-gradient(180deg, rgb(3 16 16 / 0.82) 0, rgb(3 16 16 / 0.82) 21%, rgb(3 16 16 / 0.66) 25%, rgb(3 16 16 / 0.26) 38%, rgb(3 16 16 / 0.06) 52%, transparent 62%, rgb(255 255 255 / 0.07) 84%, rgb(255 255 255 / 0.26) 93%, rgb(255 255 255 / 0.12) 96%, rgb(0 0 0 / 0.34) 100%);
+  transform: rotateX(calc(18deg + var(--a) + var(--louver) * 56deg));
+  transition: transform var(--t-louver) cubic-bezier(0.5, 0.05, 0.2, 1.06) calc(var(--pd) + var(--d));
+}
+.doors__bay--live .doors__slat::before {
+  inset: calc(var(--p) * -0.18) 0;
+}
+.doors__bay--live .doors__slat::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + var(--p) * 0.18);
+  height: calc(var(--p) * 0.2);
+  transform-origin: 50% 0;
+  transform: rotateX(-90deg);
+  background:
+    var(--matiere),
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(0 0 0 / 0.3) 55%, rgb(0 0 0 / 0.55)),
+    var(--fil-h) calc(var(--i) * -91px) calc(var(--i) * -43px) / var(--tile);
+}
+.doors__bay--live .doors__rod {
+  transform: translate3d(0, calc(var(--louver) * var(--p) * -0.42), calc(var(--p) * 0.31 + var(--louver) * var(--p) * 0.41));
+  transition: transform var(--t-louver) cubic-bezier(0.5, 0.05, 0.2, 1.06) var(--pd);
+}
+.doors__bay--live .doors__hardware {
+  transform: translateZ(calc(var(--p) * 0.34));
+}
+.doors__bay--live .doors__astragal {
+  transform: translateZ(calc(var(--p) * 0.22));
+}
+.doors__shade {
+  position: absolute;
+  inset: 0;
+  background: #06080c;
+  opacity: calc(var(--open) * 0.34);
+  transform: translateZ(1px);
+  transition: opacity var(--t-swing) var(--swing);
+}
+
+/* ---------- ombres de palmes, vignette ---------- */
+.doors__palms {
+  position: absolute;
+  inset: -6% -8%;
+  overflow: hidden;
+  transform: translateZ(1px);
+  opacity: calc(var(--sun-day) * 0.2 * max(0, 1 - var(--open) * 3));
+  transition: opacity 0.5s ease;
+}
+.doors__palms-sway {
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  background: url('../assets/textures/palmes.webp') 0 0 / max(100%, 100cqh) auto no-repeat;
+  animation: palme 11s ease-in-out infinite alternate;
+}
+.doors__vignette {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background: radial-gradient(ellipse 74% 80% at 50% 54%, transparent 56%, rgb(14 9 4 / 0.36));
+  opacity: calc(1 - var(--open) * 2.2);
+  transition: opacity 0.6s ease;
+}
+
+/* sur un écran étroit, la porte seule */
+@container (max-aspect-ratio: 1 / 1) {
+  .doors__bay--flat,
+  .doors__lantern,
+  .doors__plaque {
+    display: none;
+  }
+}
+
+/* ---------- l’arrivée ---------- */
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  cursor: pointer;
+  background: #dac8a2;
+  transition: background-color 0s linear 0.5s;
+}
+[data-theme='nuit'] .intro {
+  background: #171c3a;
+}
+.intro.intro--ready {
+  background: transparent;
+}
+.intro .doors {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.intro--ready .doors {
+  opacity: 1;
+}
+/* la béquille et les lames n’existent que sur la baie centrale : le reste de la façade n’est pas recalculé */
+.intro--unlatch .doors__bay--live {
+  --latch: 1;
+}
+.intro--louvers .doors__bay--live,
+.intro--opening .doors__bay--live {
+  --latch: 1;
+  --louver: 1;
+}
+.intro.intro--opening .doors {
+  --open: 1;
+  opacity: 0;
+  transition: opacity 0.6s ease calc(var(--t-swing) * 0.7);
+}
+.intro--opening,
+.intro--fading {
+  pointer-events: none;
+}
+.intro--fading {
+  opacity: 0;
+  transition: opacity 0.28s ease;
+}
+.intro--quick .doors {
+  --t-latch: 110ms;
+  --t-louver: 280ms;
+  --t-swing: 850ms;
+}
+.intro__skip {
+  position: absolute;
+  z-index: 6;
+  right: var(--gutter);
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 2px;
+  color: var(--paint);
+  font-weight: 600;
+  background: rgb(20 14 8 / 0.62);
+  transition: opacity 0.3s;
+}
+.intro--opening .intro__skip,
+.intro--fading .intro__skip {
+  opacity: 0;
+}

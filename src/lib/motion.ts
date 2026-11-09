@@ -18,5 +18,12 @@ export const reducedMotion = () =>
   document.documentElement.dataset.motion !== 'full' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+/** Petit appareil : la porte s’efface au lieu de s’ouvrir en volume, pour que l’arrivée reste fluide. */
+export const appareilModeste = () => {
+  if (typeof navigator === 'undefined') return false
+  const n = navigator as Navigator & { deviceMemory?: number }
+  return (n.hardwareConcurrency ?? 8) <= 2 || (n.deviceMemory ?? 8) <= 2
+}
+
 export const finePointer = () =>
   typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches

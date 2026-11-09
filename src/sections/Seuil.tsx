@@ -1,79 +1,198 @@
-// Le seuil : le mur blanc, la lumière du moment, le titre de l’exposition en lettres posées.
-import { Daylight } from '../components/Daylight'
-import { SlatReveal } from '../components/SlatReveal'
-import { Hung } from '../components/Hung'
-import { Cadran } from '../components/Cadran'
-import { ArrowDown, Arrow } from '../components/Icons'
+// Le seuil. On a passé la porte : Jacmel en miniature, exactement dans l’axe de l’ouverture.
+// Terre à gauche, Mer à droite. Une affiche s’affiche d’abord, puis la vraie 3D prend le relais.
+// Le défilement écarte le titre, descend dans les rues jusqu’à la porte du point rouge, et l’on entre : le mur de la section suivante.
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { motion, useMotionValueEvent, useScroll } from 'motion/react'
+import { Picture } from '../components/Picture'
+import { Dot } from '../components/RedDot'
+import { ArrowDown } from '../components/Icons'
 import { EXPO } from '../content/site'
-import { oeuvre } from '../content/artworks'
+import MAQUETTE from '../content/maquette.gen.json'
 import { useLight } from '../state/light'
 import { useGo } from '../state/navigate'
-import { heure, etatExposition } from '../lib/jacmel'
+import { appareilModeste, finePointer, reducedMotion } from '../lib/motion'
+import { etatExposition } from '../lib/jacmel'
+import { fr } from '../lib/fr'
+import type { Maquette } from '../maquette/scene'
+
+/** Le temps que la porte finisse de s’ouvrir et que l’affiche se pose. */
+const POSE_MS = 2700
+const smooth = (a: number, b: number, v: number) => {
+  const x = Math.min(1, Math.max(0, (v - a) / (b - a)))
+  return x * x * (3 - 2 * x)
+}
 
 export function Seuil({ entered }: { entered: boolean }) {
   const light = useLight()
   const go = useGo()
-  const baie = oeuvre('001')!
   const etat = etatExposition(light.now, EXPO.debut, EXPO.fin)
-  const kicker = etat === 'à venir' ? 'Exposition à venir · vernissage le 12 octobre' : etat === 'en cours' ? 'Exposition en cours' : 'Exposition passée'
+  const kicker = etat === 'à venir' ? 'Exposition à venir' : etat === 'en cours' ? 'Exposition en cours' : 'Exposition passée'
+
+  const [fixe] = useState(reducedMotion)
+  const [posee, setPosee] = useState(false)
+  const [vivante, setVivante] = useState(false)
+  useEffect(() => {
+    if (!entered || fixe) return
+    const id = setTimeout(() => setPosee(true), POSE_MS)
+    return () => clearTimeout(id)
+  }, [entered, fixe])
+
+  const section = useRef<HTMLElement>(null)
+  const salle = useRef<HTMLDivElement>(null)
+  const pres = useRef<HTMLDivElement>(null)
+  const affiche = useRef<HTMLDivElement>(null)
+  const toile = useRef<HTMLCanvasElement>(null)
+  const point = useRef<HTMLSpanElement>(null)
+  const maquette = useRef<Maquette | null>(null)
+  const decalage = useRef(0)
+
+  const { scrollYProgress } = useScroll({ target: section, offset: ['start start', 'end end'] })
+
+  /** Le point rouge suit la maison ; tant que la 3D n’est pas là, il se cale sur l’affiche. */
+  const suivre = useCallback(() => {
+    const s = salle.current
+    const d = point.current
+    if (!s || !d) return
+    const m = maquette.current
+    if (m) {
+      const q = m.pointGalerie()
+      const p = scrollYProgress.get()
+      d.style.transform = `translate3d(${q.x.toFixed(1)}px, ${(q.y + decalage.current * (1 - p * p)).toFixed(1)}px, 0)`
+      return
+    }
+    const a = affiche.current?.getBoundingClientRect()
+    const r = s.getBoundingClientRect()
+    if (a) d.style.transform = `translate3d(${(a.left - r.left + a.width * MAQUETTE.point[0]).toFixed(1)}px, ${(a.top - r.top + a.height * MAQUETTE.point[1]).toFixed(1)}px, 0)`
+  }, [scrollYProgress])
+
+  const caler = useCallback(() => {
+    const s = salle.current
+    const q = pres.current
+    if (!s || !q) return
+    const a = q.getBoundingClientRect()
+    const b = s.getBoundingClientRect()
+    decalage.current = a.top + a.height / 2 - (b.top + b.height / 2)
+    s.style.setProperty('--decalage', `${decalage.current.toFixed(1)}px`)
+    maquette.current?.dimensionner()
+    suivre()
+  }, [suivre])
+
+  useEffect(() => {
+    caler()
+    window.addEventListener('resize', caler)
+    return () => window.removeEventListener('resize', caler)
+  }, [caler])
+
+  // la 3D ne se charge qu’une fois la porte passée, et seulement là où elle sera fluide
+  useEffect(() => {
+    const c = toile.current
+    // seul un choix explicite du visiteur (économie de données) coupe la 3D : l’estimation de débit du navigateur n’est pas fiable,
+    // et le chargement se fait derrière l’affiche, sans rien bloquer
+    const economie = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData
+    if (!posee || fixe || !c || appareilModeste() || economie) return
+    let annule = false
+    import('../maquette/scene')
+      .then(({ creerMaquette }) =>
+        creerMaquette(c, {
+          echelle: () => ((pres.current?.offsetWidth ?? 500) * 1.04) / (0.674 * (c.clientHeight || 1)),
+          apresImage: suivre,
+          exigeant: true,
+        }),
+      )
+      .then(m => {
+        if (annule) return m.detruire()
+        maquette.current = m
+        m.regler({ pas: scrollYProgress.get() })
+        m.rendre()
+        setVivante(true)
+      })
+      .catch(() => undefined) // l’affiche reste : rien de cassé pour le visiteur
+    return () => {
+      annule = true
+      maquette.current?.detruire()
+      maquette.current = null
+    }
+  }, [posee, fixe, scrollYProgress, suivre])
+
+  useEffect(() => {
+    if (!vivante) return
+    maquette.current?.soleil(light.elevation, light.azimuth, 1 - smooth(4, 40, light.elevation), light.night)
+  }, [vivante, light.elevation, light.azimuth, light.night])
+
+  useMotionValueEvent(scrollYProgress, 'change', p => maquette.current?.regler({ pas: p }))
+
+  useEffect(() => {
+    if (!posee || fixe || !finePointer()) return
+    const bouge = (e: PointerEvent) => {
+      const x = (e.clientX / window.innerWidth) * 2 - 1
+      const y = (e.clientY / window.innerHeight) * 2 - 1
+      maquette.current?.regler({ souris: [x, y] })
+    }
+    window.addEventListener('pointermove', bouge, { passive: true })
+    return () => window.removeEventListener('pointermove', bouge)
+  }, [posee, fixe])
 
   return (
-    <section id="seuil" data-room="seuil" className={`seuil ${entered ? 'is-entered' : ''}`} aria-labelledby="seuil-titre">
-      <Daylight />
-      <div className="seuil__grid wrap">
-        <div className="seuil__text">
-          <p className="seuil__kicker label">{kicker}</p>
-          <h1 id="seuil-titre" className="seuil__title display">
-            <span className="sr-only">Terre / Mer — exposition à la Gallerie d’art de Jacmel</span>
-            <SlatReveal as="span" className="seuil__word" ready={entered} pitch="0.16em" aria-hidden>
-              Terre
-            </SlatReveal>
-            <span className="seuil__slash" aria-hidden />
-            <SlatReveal as="span" className="seuil__word seuil__word--mer" ready={entered} pitch="0.16em" delay={0.14} aria-hidden>
-              <i>Mer</i>
-            </SlatReveal>
-          </h1>
-          <p className="seuil__dek lead">{EXPO.dek}</p>
-          <p className="seuil__dates ui">
-            {EXPO.dates}
-            <span aria-hidden> · </span>
-            <span>Rue Barranquilla, Jacmel</span>
-          </p>
-          <div className="seuil__ctas">
-            <button type="button" className="btn" onClick={() => go('salle-1')}>
-              Entrer dans l’exposition <ArrowDown />
-            </button>
-            <a
-              className="arrow-link"
-              href="#comptoir"
-              onClick={e => {
-                e.preventDefault()
-                go('comptoir')
-              }}
-            >
-              Préparer sa visite <Arrow size={16} />
-            </a>
-          </div>
-        </div>
-        <div className="seuil__work">
-          <Hung a={baie} source="seuil" sizes="(max-width: 760px) 78vw, 34vw" priority hero cartel={false} />
-          <p className="seuil__cartel ui">
-            <span>{baie.artiste}</span>
-            <span>
-              <i>{baie.titre}</i>, {baie.annee}
-            </span>
-          </p>
-        </div>
-      </div>
-      <div className="seuil__foot wrap">
-        <p className="seuil__now ui" aria-live="off">
-          Il est <b>{heure(light.t)}</b> à Jacmel — {light.ambiance}.{' '}
-          <span className={`seuil__open ${light.open.open ? 'is-open' : ''}`}>
-            <span className="lamp" aria-hidden /> {light.open.label}
+    <section ref={section} id="seuil" data-room="seuil" className={`seuil ${entered ? 'is-entered' : ''} ${fixe ? 'seuil--fixe' : ''} ${vivante ? 'is-vivante' : ''}`} aria-labelledby="seuil-titre">
+      <motion.div ref={salle} className="seuil__salle" style={fixe ? undefined : ({ '--p': scrollYProgress } as unknown as CSSProperties)}>
+        <span className="seuil__mur" aria-hidden />
+
+        <h1 id="seuil-titre" className="seuil__titre">
+          <span className="sr-only">Terre / Mer — exposition à la Gallerie d’art de Jacmel</span>
+          <span className="seuil__mot seuil__mot--terre display" aria-hidden>
+            <span>Terre</span>
           </span>
-        </p>
-        <Cadran className="seuil__cadran" />
-      </div>
+          <span className="seuil__mot seuil__mot--mer display" aria-hidden>
+            <span>
+              <i>Mer</i>
+            </span>
+          </span>
+        </h1>
+
+        <div ref={pres} className="seuil__pres">
+          <div className="seuil__proche">
+            <div ref={affiche} className="seuil__affiche">
+              <div className="seuil__pose">
+                <Picture
+                  key={light.night ? 'nuit' : 'jour'}
+                  slug={light.night ? 'jacmel-maquette-nuit' : 'jacmel-maquette'}
+                  alt="Maquette en trois dimensions du centre-ville de Jacmel : le Marché en fer, la rue du Commerce, la Douane, le wharf et la baie."
+                  sizes="(max-aspect-ratio: 1/1) 90vw, min(64vh, 42vw)"
+                  fit="contain"
+                  priority
+                  hero
+                />
+              </div>
+            </div>
+          </div>
+          <button type="button" className="seuil__cadre" onClick={() => go('comptoir')} aria-label="Préparer sa visite : la galerie, au cœur de Jacmel" />
+          <p className="seuil__cartel ui">
+            <span>
+              <i>Jacmel en miniature</i>
+            </span>
+            <span>{fr(`${MAQUETTE.maisons} maisons à leur vraie place. La nôtre porte le point rouge.`)}</span>
+          </p>
+        </div>
+
+        <canvas ref={toile} className="seuil__toile" aria-hidden />
+        <span ref={point} className="seuil__point" aria-hidden>
+          <Dot />
+        </span>
+
+        <span className="seuil__voile" aria-hidden />
+
+        <div className="seuil__pied">
+          <p className="seuil__dek">{EXPO.dek}</p>
+          <button type="button" className="seuil__entrer" onClick={() => go('salle-1')}>
+            <span>Entrer dans l’exposition</span>
+            <ArrowDown />
+          </button>
+          <p className="seuil__dates ui">
+            <span>{kicker}</span>
+            <span>{EXPO.dates}</span>
+          </p>
+        </div>
+      </motion.div>
     </section>
   )
 }

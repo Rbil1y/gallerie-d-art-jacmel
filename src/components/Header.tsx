@@ -43,7 +43,9 @@ export function Header() {
     let last = window.scrollY
     const onScroll = () => {
       const y = window.scrollY
-      setSolid(y > 8)
+      // tant qu’on avance vers l’œuvre du seuil, l’en-tête reste sans fond : rien entre le regard et le mur
+      const seuil = document.getElementById('seuil')
+      setSolid(y > (seuil ? seuil.offsetHeight - window.innerHeight : 0) + 8)
       if (Math.abs(y - last) > 6) {
         setHidden(y > 160 && y > last)
         last = y

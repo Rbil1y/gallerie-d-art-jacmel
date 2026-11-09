@@ -2,8 +2,13 @@
    Chrome : en-tête, dock mobile, contrôles partagés.
    ============================================================ */
 
+/* pas de barre de défilement sur le mur : la façade et le seuil vont d’un bord à l’autre,
+   et l’ouverture de la porte ne recalcule jamais la largeur de la page */
 html {
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  display: none;
 }
 
 /* ---------- enseigne ---------- */
@@ -61,6 +66,7 @@ html {
 }
 .hdr.is-hidden {
   transform: translateY(-100%);
+  box-shadow: none;
 }
 .hdr__brand {
   justify-self: start;
@@ -139,7 +145,7 @@ html {
   min-width: 1ch;
   font-variant-numeric: tabular-nums;
 }
-@media (max-width: 1280px) {
+@media (max-width: 1640px) {
   .hdr__status-label {
     display: none;
   }

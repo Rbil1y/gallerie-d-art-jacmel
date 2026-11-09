@@ -84,6 +84,7 @@ function applyLight(elevation: number, azimuth: number, night: boolean) {
   set('--light-x', `${(morning ? lerp(-8, 10, high) : lerp(32, 22, high)).toFixed(2)}%`)
   set('--light-stretch', (1 + 0.85 * (1 - high)).toFixed(3))
   set('--light-slat', `${lerp(30, 54, high).toFixed(1)}px`)
+  set('--sun-x', night ? '0' : (-side * lerp(1, 0.15, high)).toFixed(3))
   if (night) {
     set('--shadow-x', '0px')
     set('--shadow-y', '22px')

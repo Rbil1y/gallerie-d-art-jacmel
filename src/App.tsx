@@ -41,7 +41,7 @@ function Site() {
         Aller à l’exposition
       </a>
       <Intro onOpen={() => setEntered(true)} onDone={() => undefined} />
-      <div className="site" inert={overlay}>
+      <div className={`site ${entered ? 'is-entered' : ''}`} inert={overlay}>
         <Header />
         <main id="main">
           <Seuil entered={entered} />

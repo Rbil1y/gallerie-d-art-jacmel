@@ -1,0 +1,16 @@
+<!doctype html>
+<!-- Atelier de la maquette : sert à régler la scène et à tirer ses affiches (npm run maquette:affiches). Non publié. -->
+<html lang="fr">
+<head><meta charset="UTF-8" /><title>Maquette (atelier)</title>
+<style>html,body{margin:0;height:100%;background:transparent}canvas{position:fixed;inset:0;width:100%;height:100%;display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+  import { creerMaquette } from '/src/maquette/scene.ts'
+  const q = new URLSearchParams(location.search)
+  const e = +(q.get('e') ?? 1)
+  const m = await creerMaquette(document.getElementById('c'), { echelle: () => e, dprMax: 1 })
+  if (q.has('nuit')) m.soleil(0, 150, 0, true)
+  window.__m = m
+  setTimeout(() => (window.__pret = true), 700)
+</script>
+</body></html>

@@ -27,6 +27,12 @@ fabrique les versions web (AVIF + WebP, 640/1280/2048 px, aperçu flou) dans `pu
 `npm run photos:fetch` retélécharge les photographies Wikimedia Commons d’origine (crédits et licences
 dans `src/content/credits.ts`, affichés dans le colophon).
 
+`npm run maquette` reconstruit la maquette 3D du seuil depuis OpenStreetMap (`public/maquette/`). Puis,
+serveur de développement lancé, `npm run maquette:affiches` retire ses affiches et `npm run images` les publie.
+
+`npm run textures` recuit les matières de la façade (bois peint, enduit, ombre de palmes) dans
+`src/assets/textures/`. Inutile tant qu’on ne change pas ces matières : les fichiers sont versionnés.
+
 ## Contenu
 
 - `src/content/artworks.ts` : les huit pièces, les quatre salles et leurs textes.

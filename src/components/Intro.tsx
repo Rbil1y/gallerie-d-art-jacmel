@@ -1,20 +1,32 @@
-// L’arrivée : les persiennes sont fermées. Les lames s’ouvrent, la lumière passe, puis les battants.
-// Attend les polices et l’image du seuil (2,6 s maximum). Version courte dans la même session.
+// L’arrivée : la porte est fermée. La béquille tourne, les lames s’ouvrent, puis les battants, et on passe le seuil.
+// Attend les polices, l’image du seuil et les matières (3,2 s maximum). Version courte dans la même session.
 import { useEffect, useRef, useState } from 'react'
 import { Doors } from './Doors'
 import { lire, ecrire } from '../lib/storage'
-import { reducedMotion } from '../lib/motion'
+import { appareilModeste, reducedMotion } from '../lib/motion'
 import { useLight } from '../state/light'
 import { heure } from '../lib/jacmel'
+import peintureH from '../assets/textures/peinture-h.webp'
+import peintureV from '../assets/textures/peinture-v.webp'
+import enduit from '../assets/textures/enduit.webp'
+import palmes from '../assets/textures/palmes.webp'
 
-type Stage = 'closed' | 'louvers' | 'opening' | 'fading' | 'gone'
+type Stage = 'closed' | 'unlatch' | 'louvers' | 'opening' | 'fading' | 'gone'
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
+const decoder = (src: string) => {
+  const image = new Image()
+  image.src = src
+  return image.decode().catch(() => undefined)
+}
+
 export function Intro({ onOpen, onDone }: { onOpen: () => void; onDone: () => void }) {
-  const reduced = reducedMotion()
+  const reduced = reducedMotion() || appareilModeste()
   const [stage, setStage] = useState<Stage>('closed')
-  const [quick] = useState(() => lire('gallerie:entree', false, 'session'))
+  const [ready, setReady] = useState(false)
+  // ?motion=full : démonstration, toujours la version longue
+  const [quick] = useState(() => !/[?&]motion=full(&|$)/.test(location.search) && lire('gallerie:entree', false, 'session'))
   const { now, open } = useLight()
   const started = useRef(false)
   const cbs = useRef({ onOpen, onDone })
@@ -33,29 +45,34 @@ export function Intro({ onOpen, onDone }: { onOpen: () => void; onDone: () => vo
       }, 280)
       return
     }
-    const louvers = fast ? 220 : 760
-    const doors = fast ? 760 : 1250
-    setStage('louvers')
+    const latch = fast ? 110 : 420
+    const louvers = fast ? 320 : 1020
+    const doors = fast ? 1050 : 1950
+    setStage('unlatch')
+    setTimeout(() => setStage('louvers'), latch)
     setTimeout(() => {
       setStage('opening')
       cbs.current.onOpen()
-    }, louvers)
+    }, latch + louvers)
     setTimeout(() => {
       setStage('gone')
       cbs.current.onDone()
-    }, louvers + doors)
+    }, latch + louvers + doors)
   }
 
   useEffect(() => {
     ecrire('gallerie:entree', true, 'session')
     document.documentElement.classList.add('is-locked')
     const hero = document.querySelector<HTMLImageElement>('img[data-hero]')
+    const matieres = Promise.all([peintureH, peintureV, enduit, palmes].map(decoder))
+    Promise.race([matieres, wait(1400)]).then(() => setReady(true))
     const gates = Promise.all([
       document.fonts?.ready ?? Promise.resolve(),
       hero?.decode?.().catch(() => undefined) ?? Promise.resolve(),
-      wait(quick ? 120 : reduced ? 750 : 1000),
+      matieres,
+      wait(quick ? 120 : reduced ? 750 : 1800),
     ])
-    Promise.race([gates, wait(2600)]).then(() => go(quick))
+    Promise.race([gates, wait(3200)]).then(() => go(quick))
 
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && ['Shift', 'Alt', 'Control', 'Meta', 'Tab'].includes(e.key)) return
@@ -78,18 +95,14 @@ export function Intro({ onOpen, onDone }: { onOpen: () => void; onDone: () => vo
 
   if (stage === 'gone') return null
   return (
-    <div className={`intro intro--${stage} ${quick ? 'intro--quick' : ''}`} onClick={() => go(true)}>
+    <div className={`intro intro--${stage} ${ready ? 'intro--ready' : ''} ${quick ? 'intro--quick' : ''}`} onClick={() => go(true)}>
       <Doors
         className="intro__doors"
-        sign={
-          <>
-            <span className="sign__main">Gallerie d’art</span>
-            <span className="sign__script">de Jacmel</span>
-            <span className="sign__small">
-              Rue Barranquilla · {open.open ? 'ouvert' : 'fermé'} · {heure(now)}
-            </span>
-          </>
-        }
+        sign={{
+          main: 'Gallerie d’art',
+          script: 'de Jacmel',
+          small: `Rue Barranquilla · ${open.open ? 'ouvert' : 'fermé'} · ${heure(now)}`,
+        }}
       />
       <button type="button" className="intro__skip ui" onClick={() => go(true)}>
         Entrer

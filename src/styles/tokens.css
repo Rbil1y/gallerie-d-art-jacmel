@@ -48,6 +48,7 @@
   --light-x: 2%;
   --light-stretch: 1.4;
   --light-slat: 40px;
+  --sun-x: 0.6; /* -1 soleil à droite → 1 soleil à gauche */
   --shadow-x: 16px;
   --shadow-y: 12px;
   --shadow-blur: 28px;

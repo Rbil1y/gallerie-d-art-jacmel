@@ -464,6 +464,9 @@ if (!process.env.SANS_SOL) {
   const CHAUS = hex('#aba08e')
   const BRIQUE = hex('#a8704f')
   const BRIQUE2 = hex('#8f5c44')
+  // masques adoucis : ils servent de couverture pour peindre le sol, sans déplacer aucun objet
+  const adoucir = b => sharp(b, { raw: { width: M, height: M, channels: 1 } }).blur(0.7).greyscale().raw().toBuffer()
+  const [solRues, solNobles, solPlage, solParc] = await Promise.all([rasRues, rasNobles, rasPlage, rasParc].map(adoucir))
   for (let y = 0; y < M; y++) {
     for (let x = 0; x < M; x++) {
       const i = y * M + x
@@ -484,44 +487,45 @@ if (!process.env.SANS_SOL) {
         h = onde * 2.2 + f * 3 + train * 1.4
         rg = 0.06 + clamp(f + train) * 0.55
       } else {
-        const g = rasRues[i]
+        // chaque matière est posée selon sa couverture : un seuil par texel dessinerait des dents en gros plan
+        const g = solRues[i]
         const wear = fbm(n1, wx * 0.09, wz * 0.09, 3)
         const fine = n5(wx * 1.1, wz * 1.1)
-        if (rasPlage[i] > 128 && g < 110) {
-          c = mix(SABLE, SABLE2, smooth(-0.3, 0.3, wear + fine * 0.2) * smooth(16, 2, -s + 8))
-          h = fine * 0.5
-          rg = 0.9
-        } else if (g > 200) {
-          if (rasNobles[i] > 128) {
+        const poser = (cc, hh, rr, w) => {
+          c = mix(c, cc, w)
+          h = lerp(h, hh, w)
+          rg = lerp(rg, rr, w)
+        }
+        c = mix(TERRE, TERRE2, smooth(-0.4, 0.4, wear))
+        c = mix(c, HERBE, smooth(-0.2, 0.24, fbm(n3, wx * 0.075, wz * 0.075, 3)) * 0.9)
+        h = fine * 0.8
+        rg = 1
+        const wParc = solParc[i] / 255
+        if (wParc > 0) poser(mix(GAZON, HERBE, smooth(-0.3, 0.4, wear + fine * 0.3)), fine * 0.9, 1, wParc)
+        const wPlage = solPlage[i] / 255
+        if (wPlage > 0) poser(mix(SABLE, SABLE2, smooth(-0.3, 0.3, wear + fine * 0.2) * smooth(16, 2, -s + 8)), fine * 0.5, 0.9, wPlage)
+        // le trottoir vaut 130 dans le masque des rues, la chaussée 255
+        const wTrot = clamp(g / 120)
+        if (wTrot > 0) {
+          const dalle = Math.min(Math.abs((wz * 0.9) % 1), Math.abs((wx * 0.9) % 1))
+          poser(mix(mix(TROT, [188, 178, 158], smooth(-0.3, 0.4, wear)), [120, 112, 98], smooth(0.08, 0.02, dalle) * 0.5), 0.7 + fine * 0.15, 0.88, wTrot)
+        }
+        const wRue = clamp((g - 140) / 105)
+        if (wRue > 0) {
+          let cr = mix(CHAUS, [150, 140, 125], smooth(-0.35, 0.4, wear))
+          cr = mix(cr, [128, 120, 108], smooth(0.2, 0.26, fbm(n4, wx * 0.11, wz * 0.11, 2)) * 0.7)
+          let hr = -0.5 + fine * 0.3
+          // atteint sa pleine valeur avant la chaussée, pour ne pas laisser de liseré gris le long des pavés
+          const wNoble = clamp(solNobles[i] / 90)
+          if (wNoble > 0) {
             // pavés posés à la main
             const lig = Math.floor(wz * 1.05)
             const col = Math.floor(wx * 0.62 + (lig % 2) * 0.5)
             const joint = Math.min(Math.abs((wz * 1.05) % 1), Math.abs((wx * 0.62 + (lig % 2) * 0.5) % 1))
-            const teinte = hache(col, lig)
-            c = mix(mix(BRIQUE, BRIQUE2, teinte), [70, 58, 48], smooth(0.1, 0.02, joint) * 0.55)
-            h = -0.5 + smooth(0.02, 0.14, joint) * 1.1
-          } else {
-            c = mix(CHAUS, [150, 140, 125], smooth(-0.35, 0.4, wear))
-            const rustine = smooth(0.2, 0.26, fbm(n4, wx * 0.11, wz * 0.11, 2))
-            c = mix(c, [128, 120, 108], rustine * 0.7)
-            h = -0.5 + fine * 0.3
+            cr = mix(cr, mix(mix(BRIQUE, BRIQUE2, hache(col, lig)), [70, 58, 48], smooth(0.1, 0.02, joint) * 0.55), wNoble)
+            hr = lerp(hr, -0.5 + smooth(0.02, 0.14, joint) * 1.1, wNoble)
           }
-          c = mix(c, [78, 68, 56], smooth(226, 254, 510 - g * 2 > 0 ? 255 : 255 - (g - 200) * 0.2) * 0)
-          rg = 0.82
-        } else if (g > 90) {
-          const dalle = Math.min(Math.abs((wz * 0.9) % 1), Math.abs((wx * 0.9) % 1))
-          c = mix(mix(TROT, [188, 178, 158], smooth(-0.3, 0.4, wear)), [120, 112, 98], smooth(0.08, 0.02, dalle) * 0.5)
-          h = 0.7 + fine * 0.15
-          rg = 0.88
-        } else if (rasParc[i] > 128) {
-          c = mix(GAZON, HERBE, smooth(-0.3, 0.4, wear + fine * 0.3))
-          h = fine * 0.9
-          rg = 1
-        } else {
-          c = mix(TERRE, TERRE2, smooth(-0.4, 0.4, wear))
-          c = mix(c, HERBE, smooth(-0.2, 0.24, fbm(n3, wx * 0.075, wz * 0.075, 3)) * 0.9)
-          h = fine * 0.8
-          rg = 1
+          poser(cr, hr, 0.82, wRue)
         }
         const contact = 1 - 0.58 * clamp((ao1[i] / 255) * 2.3) - 0.26 * clamp((ao2[i] / 255) * 2.2)
         c = [c[0] * contact, c[1] * contact, c[2] * contact]

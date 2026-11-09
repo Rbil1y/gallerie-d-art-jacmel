@@ -102,6 +102,7 @@ export function Seuil({ entered }: { entered: boolean }) {
       .then(m => {
         if (annule) return m.detruire()
         maquette.current = m
+        m.dimensionner() // la fenêtre a pu changer de taille pendant la construction
         m.regler({ pas: scrollYProgress.get() })
         m.rendre()
         setVivante(true)

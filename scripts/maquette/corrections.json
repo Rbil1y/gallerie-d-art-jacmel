@@ -54,14 +54,25 @@
   },
   "flotte": {
     "cargo au wharf": {
-      "description": "cargo à coque rouge, château blanc à l’arrière, deux grues de bord, amarré le long du wharf",
+      "description": "cargo à coque rouge effilée, liston blanc, château blanc à trois étages à l’arrière, cheminée, trois grues de bord à flèche jaune ; bollards et lampadaires sur la jetée",
       "source": "Vol de drone YouTube Rj2wOofP-wE, Wilaventure, 16 octobre 2026, 0:10 à 1:30 ; présent aussi sur « Warf touristique.jpg » (2021)",
       "statut": "vérifié (présence), supposé (côté du quai et dimensions)"
+    },
+    "navire au mouillage": {
+      "description": "cargo à coque brun-rouge rouillée, château blanc, sans grues, au mouillage dans la baie",
+      "source": "Vol de drone YouTube Rj2wOofP-wE, Wilaventure, 16 octobre 2026, vers 4:30 à 6:30",
+      "statut": "vérifié (présence), supposé (position et dimensions)"
     }
   },
   "toitures": {
-    "observation": "vu du ciel, la tôle grise domine, puis la rouge et la terre cuite ; quelques toits bleus ; beaucoup de toits-terrasses blancs",
+    "observation": "vu du ciel, la tôle grise domine, puis la rouge et la terre cuite ; quelques toits bleus ; beaucoup de toits-terrasses blancs ; réservoirs d’eau noirs et bleus ; quelques panneaux solaires",
     "source": "Vol de drone YouTube Rj2wOofP-wE, Wilaventure, 16 octobre 2026, 1:30 à 14:00",
     "statut": "vérifié pour l’ensemble ; chaque maison reste tirée au hasard dans ces proportions"
+  },
+  "vegetation": {
+    "observation": "ville très boisée : grands arbres dans les cours, cocotiers le long du front de mer",
+    "changement": "densité des arbres hors parcs augmentée d’environ 35 % (142 → 203 arbres, 74 → 92 palmiers)",
+    "source": "Vol de drone YouTube Rj2wOofP-wE, Wilaventure, 16 octobre 2026",
+    "statut": "vérifié pour l’ensemble ; chaque arbre reste placé au hasard"
   }
 }

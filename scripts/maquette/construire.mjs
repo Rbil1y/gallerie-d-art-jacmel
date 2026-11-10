@@ -309,7 +309,8 @@ for (let i = 0; i < 12000; i++) {
   const u = r()
   if (s > -3 || !libre(q) || plage(q)) continue
   // sur la place dallée, les arbres se tiennent au bord : peu au milieu
-  const dens = (rasPlace[indice(q)] > 128 ? 0.05 : parc(q) ? 0.26 : s > -46 ? 0.022 : 0.07) * (procheNoble(q[0], q[1]) ? 0.3 : 1)
+  // vue du ciel (vol d'octobre 2026), la ville est plus boisée qu'on ne le croit : grands manguiers dans les cours
+  const dens = (rasPlace[indice(q)] > 128 ? 0.05 : parc(q) ? 0.26 : s > -46 ? 0.03 : 0.095) * (procheNoble(q[0], q[1]) ? 0.3 : 1)
   if (t < dens * 0.3) palmiers.push([+q[0].toFixed(1), +q[1].toFixed(1), +(u * 6.28).toFixed(2), +(0.8 + hache(i) * 0.5).toFixed(2)])
   else if (t < dens) arbres.push([+q[0].toFixed(1), +q[1].toFixed(1), +(2.2 + u * u * 3.2).toFixed(2), +hache(i, 2).toFixed(3)])
 }

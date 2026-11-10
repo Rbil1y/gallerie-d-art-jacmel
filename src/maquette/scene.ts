@@ -102,6 +102,23 @@ class Lot {
   }
 }
 
+/** Une barre de section carrée, de a à b (flèche de grue, mât, poutre inclinée). */
+function barre(lot: Lot, a: V, b: V, ep: number, col: C) {
+  const d = norm(sub(b, a))
+  const ref: V = Math.abs(d[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]
+  const u = norm(cross(d, ref))
+  const v = norm(cross(d, u))
+  const h = ep / 2
+  const coin = (p: V, su: number, sv: number): V => [p[0] + (u[0] * su + v[0] * sv) * h, p[1] + (u[1] * su + v[1] * sv) * h, p[2] + (u[2] * su + v[2] * sv) * h]
+  for (const [su0, sv0, su1, sv1, n] of [
+    [1, -1, 1, 1, u],
+    [1, 1, -1, 1, v],
+    [-1, 1, -1, -1, [-u[0], -u[1], -u[2]]],
+    [-1, -1, 1, -1, [-v[0], -v[1], -v[2]]],
+  ] as [number, number, number, number, V][])
+    lot.quad(coin(a, su0, sv0), coin(a, su1, sv1), coin(b, su1, sv1), coin(b, su0, sv0), n, [0, 0, 1, 1], col, fois(col, 0.92))
+}
+
 const tuile = (col: number, rang: number): [number, number, number, number] => {
   const e = 0.012
   return [(col + e) / 8, 1 - (rang + 1 - e) / 8, (col + 1 - e) / 8, 1 - (rang + e) / 8]
@@ -488,7 +505,18 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       if (!m.tp && m.s > 45 && r2 < 0.55) {
         const tx = m.c[0] + (r2 - 0.25) * R.hl * 0.9
         const tz = m.c[1] + (m.r - 0.5) * R.hw * 0.9
-        pleins.boite(tx, yT + 0.86, tz, 1.5, 1.6, 1.5, r2 * 3, lin('#1f2226'))
+        // vus du ciel : réservoirs noirs, et nombre de bleus
+        pleins.boite(tx, yT + 0.86, tz, 1.5, 1.6, 1.5, r2 * 3, lin(hache(m.id % 433, 5) < 0.35 ? '#2f5f9e' : '#1f2226'))
+      }
+      // panneaux solaires sur un toit-terrasse sur cinq
+      if (!m.tp && m.s > 60 && hache(m.id % 577, 6) < 0.2) {
+        const { cx, cz, ux, uz, hl, hw } = R
+        const ang = Math.atan2(uz, ux)
+        const n = Math.min(4, Math.max(1, Math.floor(hl / 2.4)))
+        for (let k = 0; k < n; k++) {
+          const a = (k - (n - 1) / 2) * 2.3
+          pleins.boite(cx + ux * a - uz * hw * 0.3, yT + 0.35, cz + uz * a + ux * hw * 0.3, 2, 0.12, Math.min(3.2, hw * 0.9), ang, lin('#1d2a3d'), lin('#3c4652'))
+        }
       }
       if (!m.tp && m.s > 40) for (const q of m.p.slice(0, 6)) pleins.boite(q[0] * 0.97 + m.c[0] * 0.03, yT + 0.9, q[1] * 0.97 + m.c[1] * 0.03, 0.09, 1.6, 0.09, 0, lin('#4a4038'))
     }
@@ -647,49 +675,140 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     }
   }
 
-  // ---------- le cargo amarré le long du wharf (vol de drone du 16 octobre 2026) ----------
+  // ---------- les navires (vol de drone du 16 octobre 2026) ----------
+  /** Un cargo : coque effilée à l'étrave, pont et panneaux de cale, château à l'arrière, grues de bord. */
+  const navire = (cx: number, cz: number, ang: number, L: number, coque: C, grues: boolean) => {
+    const ux = Math.cos(ang)
+    const uz = Math.sin(ang)
+    const Pn = (a: number, b: number, y: number): V => [cx + ux * a - uz * b, y, cz + uz * a + ux * b]
+    const larg = L * 0.16
+    // demi-largeur le long de la coque, de la poupe (-1/2) à l'étrave (+1/2)
+    const prof: [number, number][] = [
+      [-0.5, 0.82],
+      [-0.44, 0.97],
+      [-0.2, 1],
+      [0.26, 1],
+      [0.38, 0.86],
+      [0.46, 0.5],
+      [0.5, 0.06],
+    ]
+    const yQ = -0.4
+    const yP = 3.6
+    const pont = lin('#584a40')
+    const flottaison = lin('#2a2523')
+    for (let i = 1; i < prof.length; i++) {
+      const [t0, w0] = prof[i - 1]
+      const [t1, w1] = prof[i]
+      const a0 = t0 * L
+      const a1 = t1 * L
+      for (const sgn of [1, -1]) {
+        const h0 = (w0 * larg) / 2
+        const h1 = (w1 * larg) / 2
+        // la coque, un peu rentrée vers le bas ; une bande sombre à la flottaison
+        pleins.quad(Pn(a0, sgn * h0 * 0.9, yQ), Pn(a1, sgn * h1 * 0.9, yQ), Pn(a1, sgn * h1 * 0.94, 0.6), Pn(a0, sgn * h0 * 0.94, 0.6), norm([-uz * sgn, -0.2, ux * sgn]), [0, 0, 1, 1], flottaison)
+        pleins.quad(Pn(a0, sgn * h0 * 0.94, 0.6), Pn(a1, sgn * h1 * 0.94, 0.6), Pn(a1, sgn * h1, yP), Pn(a0, sgn * h0, yP), [-uz * sgn, 0, ux * sgn], [0, 0, 1, 1], fois(coque, 0.82), coque)
+        // le liston blanc
+        pleins.quad(Pn(a0, sgn * h0, yP), Pn(a1, sgn * h1, yP), Pn(a1, sgn * h1, yP + 0.5), Pn(a0, sgn * h0, yP + 0.5), [-uz * sgn, 0, ux * sgn], [0, 0, 1, 1], lin('#ece8de'))
+      }
+      const h0 = (w0 * larg) / 2
+      const h1 = (w1 * larg) / 2
+      pleins.quad(Pn(a0, -h0, yP), Pn(a1, -h1, yP), Pn(a1, h1, yP), Pn(a0, h0, yP), [0, 1, 0], [0, 0, 1, 1], pont)
+    }
+    // tableau arrière
+    const hp = (prof[0][1] * larg) / 2
+    pleins.quad(Pn(-L / 2, hp * 0.9, yQ), Pn(-L / 2, -hp * 0.9, yQ), Pn(-L / 2, -hp, yP), Pn(-L / 2, hp, yP), [-ux, 0, -uz], [0, 0, 1, 1], fois(coque, 0.7))
+    // panneaux de cale
+    for (const t of [-0.16, 0.04, 0.24]) {
+      const q = Pn(L * t, 0, 0)
+      pleins.boite(q[0], yP + 0.35, q[2], L * 0.16, 0.7, larg * 0.62, ang, lin('#7c5d4a'), lin('#5a4438'))
+    }
+    // le château : trois étages en retrait, fenêtres en bandeau, passerelle débordante
+    const blanc = lin('#ece8de')
+    const xc = -L / 2 + L * 0.1
+    for (let k = 0; k < 3; k++) {
+      const q = Pn(xc - k * 0.3, 0, 0)
+      const y = yP + 0.5 + k * 2.5
+      pleins.boite(q[0], y + 1.25, q[2], L * 0.13 - k * 0.6, 2.5, larg * (0.84 - k * 0.06), ang, blanc, fois(blanc, 0.84))
+      pleins.boite(q[0], y + 1.6, q[2], L * 0.13 - k * 0.6 + 0.06, 0.55, larg * (0.84 - k * 0.06) + 0.06, ang, lin('#27303a'))
+    }
+    {
+      const q = Pn(xc + L * 0.05, 0, 0)
+      pleins.boite(q[0], yP + 8.3, q[2], 2.2, 1.6, larg * 1.04, ang, blanc, fois(blanc, 0.84))
+      pleins.boite(q[0] , yP + 8.5, q[2], 2.26, 0.5, larg * 1.05, ang, lin('#27303a'))
+      const f = Pn(xc - L * 0.05, 0, 0)
+      pleins.boite(f[0], yP + 10.2, f[2], 2.2, 3.2, 1.8, ang, lin('#d8d2c6'))
+      pleins.boite(f[0], yP + 12, f[2], 2.24, 0.6, 1.84, ang, lin('#1f1f22'))
+      const mt = Pn(xc + L * 0.03, 0, 0)
+      barre(pleins, [mt[0], yP + 9.1, mt[2]], [mt[0], yP + 13.5, mt[2]], 0.2, blanc)
+    }
+    // grues de bord : fût, et flèche inclinée vers l'avant
+    if (grues)
+      for (const t of [-0.06, 0.14, 0.34]) {
+        const q = Pn(L * t, larg * 0.32, 0)
+        const pied: V = [q[0], yP, q[2]]
+        const tete: V = [q[0], yP + 7.2, q[2]]
+        barre(pleins, pied, tete, 0.9, blanc)
+        const bout = Pn(L * (t + 0.15), -larg * 0.1, yP + 10.5)
+        barre(pleins, tete, bout, 0.42, lin('#e2c24a'))
+        barre(pleins, [tete[0], tete[1] + 1.4, tete[2]], bout, 0.08, lin('#3a3a3a'))
+      }
+  }
   {
-    let quai: { x: number; z: number; ux: number; uz: number; d: number } | null = null
+    let quai: { x: number; z: number; ux: number; uz: number; d: number; ax: number; az: number } | null = null
     for (const w of D.wharf) {
       const enMer = w.filter(([x, z]) => Math.abs(x) < B / 2 - 28 && Math.abs(z) < B / 2 - 28 && hauteur(x, z) <= 0.05)
       if (enMer.length < 2) continue
       const [ax, az] = enMer[0]
       const [bx, bz] = enMer[enMer.length - 1]
       const d = Math.hypot(bx - ax, bz - az)
-      if (!quai || d > quai.d) quai = { x: bx, z: bz, ux: (bx - ax) / (d || 1), uz: (bz - az) / (d || 1), d }
+      if (!quai || d > quai.d) quai = { x: bx, z: bz, ux: (bx - ax) / (d || 1), uz: (bz - az) / (d || 1), d, ax, az }
     }
     if (quai && quai.d > 24) {
-      const L = Math.min(56, quai.d * 0.95)
-      const ang = Math.atan2(quai.uz, quai.ux)
-      // le long du quai, du côté du large
+      const L = Math.min(58, quai.d * 0.95)
+      // le long du quai, du côté du large ; l'étrave dépasse un peu le bout de la jetée
       const cx = quai.x - quai.ux * (L / 2 - 7) - quai.uz * 15
       const cz = quai.z - quai.uz * (L / 2 - 7) + quai.ux * 15
-      const Q = (a: number, b: number): [number, number] => [cx + quai.ux * a - quai.uz * b, cz + quai.uz * a + quai.ux * b]
-      const coque = lin('#7a2b24')
-      const blanc = lin('#ece8de')
-      let q = Q(-L * 0.04, 0)
-      pleins.boite(q[0], 1.0, q[1], L * 0.9, 4.2, 10.4, ang, coque, fois(coque, 0.6))
-      q = Q(L * 0.47, 0)
-      pleins.boite(q[0], 1.3, q[1], L * 0.1, 3.6, 6.6, ang, coque, fois(coque, 0.6)) // l'étrave
-      q = Q(-L * 0.04, 0)
-      pleins.boite(q[0], 3.15, q[1], L * 0.9, 0.12, 10.5, ang, lin('#5d4c42')) // le pont, et ses panneaux de cale
-      for (const t of [-0.22, 0.05, 0.32]) {
-        q = Q(L * t, 0)
-        pleins.boite(q[0], 3.45, q[1], L * 0.2, 0.5, 7.6, ang, lin('#7f6250'))
+      navire(cx, cz, Math.atan2(quai.uz, quai.ux), L, lin('#8e2e24'), true)
+      // bollards et lampadaires sur la jetée
+      for (let d = 4; d < quai.d; d += 7) {
+        const x = quai.ax + quai.ux * d
+        const z = quai.az + quai.uz * d
+        pleins.boite(x - quai.uz * 3.4, 1.65, z + quai.ux * 3.4, 0.45, 0.6, 0.45, 0, lin('#2a2624'))
+        if (Math.round(d / 7) % 3 === 0) {
+          pleins.boite(x + quai.uz * 3.5, 4.1, z - quai.ux * 3.5, 0.18, 5.4, 0.18, 0, lin('#9a9a96'))
+          pleins.boite(x + quai.uz * 3.1, 6.8, z - quai.ux * 3.1, 1, 0.22, 0.4, Math.atan2(quai.uz, quai.ux) + Math.PI / 2, lin('#d9d6cc'))
+        }
       }
-      // le château, à l'arrière
-      q = Q(-L * 0.38, 0)
-      pleins.boite(q[0], 7.4, q[1], 8.5, 8.4, 9.6, ang, blanc, fois(blanc, 0.8))
-      pleins.boite(q[0], 10.9, q[1], 8.7, 0.9, 9.8, ang, lin('#2b3540'))
-      q = Q(-L * 0.43, 0)
-      pleins.boite(q[0], 13.2, q[1], 2.2, 3.4, 2.4, ang, lin('#c94a32'))
-      // deux grues de bord
-      for (const t of [-0.1, 0.22]) {
-        q = Q(L * t, 0)
-        pleins.boite(q[0], 8.4, q[1], 0.8, 10.4, 0.8, ang, blanc, fois(blanc, 0.8))
-        q = Q(L * t, -3.2)
-        pleins.boite(q[0], 13.1, q[1], 0.5, 0.5, 7.4, ang, blanc)
+      // le second navire, au mouillage dans la baie : le point d'eau libre le plus proche d'une position au large
+      const cible = [quai.x + quai.ux * 170 + quai.uz * 40, quai.z + quai.uz * 170 - quai.ux * 40]
+      let mieux: [number, number] | null = null
+      /** dégagement autour d'un point : jusqu'où, en mètres, il n'y a que de l'eau dans le socle */
+      const degagement = (x: number, z: number) => {
+        let r = 0
+        for (const rr of [12, 24, 36, 48, 60, 72]) {
+          for (let k = 0; k < 16; k++) {
+            const a = (k / 16) * Math.PI * 2
+            const px = x + Math.cos(a) * rr
+            const pz = z + Math.sin(a) * rr
+            if (Math.abs(px) > B / 2 - 4 || Math.abs(pz) > B / 2 - 4 || hauteur(px, pz) > 0.02) return r
+          }
+          r = rr
+        }
+        return r
       }
+      let meilleur = -Infinity
+      for (let x = -B / 2 + 30; x < B / 2 - 30; x += 6)
+        for (let z = -B / 2 + 30; z < B / 2 - 30; z += 6) {
+          if (Math.hypot(x - quai.x, z - quai.z) < 90) continue
+          const r = degagement(x, z)
+          if (r < 36) continue
+          const note = r * 4 - Math.hypot(x - cible[0], z - cible[1])
+          if (note > meilleur) {
+            meilleur = note
+            mieux = [x, z]
+          }
+        }
+      if (mieux) navire(mieux[0], mieux[1], Math.atan2(quai.uz, quai.ux) + 2.2, 50, lin('#6e3a2c'), false)
     }
   }
 

@@ -156,7 +156,10 @@ export type Maquette = {
   soleil: (elevation: number, azimut: number, chaud: number, nuit: boolean) => void
   dimensionner: () => void
   pointGalerie: () => { x: number; y: number }
-  rendre: () => void
+  /** une image tout de suite ; `allegee` : celle du défilement rapide, pour la contrôler */
+  rendre: (allegee?: boolean) => void
+  /** ce qu’a mesuré le banc d’essai au démarrage */
+  mesure: () => { ms: number; allegement: number }
   detruire: () => void
 }
 
@@ -168,19 +171,25 @@ export type OptionsMaquette = {
   exigeant?: boolean
   /** appelé après chaque image, pour suivre le point rouge */
   apresImage?: () => void
+  /** false : jamais d’image allégée pendant le défilement (les affiches, l’atelier) */
+  allegement?: boolean
 }
 
 export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsMaquette): Promise<Maquette> {
+  /** jalons de la construction, lisibles dans l’onglet Performance du navigateur */
+  const jalon = (nom: string) => performance.mark(`maquette:${nom}`)
+  jalon('début')
   const base = `${import.meta.env.BASE_URL}maquette/`
   const D: Donnees = await (await fetch(`${base}donnees.json`)).json()
   const { B, GR, relief } = D
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' })
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'high-performance' })
   renderer.setClearColor(0x000000, 0)
   renderer.toneMapping = THREE.NoToneMapping // appliqué à la dernière passe, après la profondeur de champ
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.VSMShadowMap
   renderer.shadowMap.autoUpdate = false
+  renderer.autoClear = false
   const anis = Math.min(4, renderer.capabilities.getMaxAnisotropy())
   /** Rend la main au navigateur : la construction ne doit jamais figer la page. */
   const souffle = () => new Promise<void>(r => setTimeout(r, 0))
@@ -199,6 +208,11 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     t.needsUpdate = true
     return t
   }
+  // La pièce qui sert de ciel à la mer : ses programmes se préparent en arrière-plan pendant que les textures se chargent.
+  const piece = new RoomEnvironment()
+  const rtTemoin = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType })
+  renderer.setRenderTarget(rtTemoin)
+  const piecePrete = renderer.compileAsync(piece, new THREE.PerspectiveCamera())
   const [solC, solN, solR, solE, facC, facN, facE, toleC, toleN, cotes, fer, beton, feuilles, palme] = await Promise.all([
     tex('sol', true),
     tex('sol-normale'),
@@ -216,21 +230,42 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     tex('palme', true),
   ])
 
+  jalon('textures décodées')
   const scene = new THREE.Scene()
   const pmrem = new THREE.PMREMGenerator(renderer)
-  const envRT = pmrem.fromScene(new RoomEnvironment(), 0.04)
+  await piecePrete
+  const envRT = pmrem.fromScene(piece, 0.04)
+  rtTemoin.dispose()
   scene.environment = envRT.texture
   scene.environmentIntensity = 0.5
 
+  jalon('environnement')
   // ---------- matériaux ----------
-  const matFacade = new THREE.MeshLambertMaterial({ map: facC, normalMap: facN, normalScale: new THREE.Vector2(1.1, 1.1), vertexColors: true, emissive: 0xffffff, emissiveMap: facE, emissiveIntensity: 0 })
-  const matTole = new THREE.MeshLambertMaterial({ map: toleC, normalMap: toleN, normalScale: new THREE.Vector2(0.9, 0.9), vertexColors: true, side: THREE.DoubleSide })
-  const matPlein = new THREE.MeshLambertMaterial({ vertexColors: true })
-  const matBeton = new THREE.MeshLambertMaterial({ map: beton, vertexColors: true })
-  const matFer = new THREE.MeshLambertMaterial({ alphaMap: fer, alphaTest: 0.5, vertexColors: true, side: THREE.DoubleSide })
-  const matSol = new THREE.MeshStandardMaterial({ map: solC, normalMap: solN, normalScale: new THREE.Vector2(1, 1), roughnessMap: solR, roughness: 1, emissive: 0xffffff, emissiveMap: solE, emissiveIntensity: 0 })
-  const matCotes = new THREE.MeshLambertMaterial({ map: cotes })
-  const matSocle = new THREE.MeshLambertMaterial({ color: '#2a201a' })
+  // Chaque matériau rend sa couleur déjà « développée » (courbe filmique) : elle tient alors sur 8 bits, quatre fois moins
+  // lourde à déplacer pour un GPU intégré. Il écrit aussi sa netteté (1 = au point), que lira la profondeur de champ.
+  const uNet = { value: new THREE.Vector2(100, 0.01) } // distance de mise au point, 1 / étendue de la zone nette
+  const film = <T extends THREE.Material>(m: T, net = true): T => {
+    m.onBeforeCompile = sh => {
+      sh.uniforms.uNet = uNet
+      sh.fragmentShader = sh.fragmentShader
+        .replace('void main() {', 'layout(location = 1) out highp vec4 gNet;\nuniform vec2 uNet;\nvoid main() {')
+        .replace(
+          '#include <tonemapping_fragment>',
+          `{ vec3 x = gl_FragColor.rgb; gl_FragColor.rgb = clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+          gNet = vec4(1.0 - smoothstep(0.0, 1.0, abs(1.0 / gl_FragCoord.w - uNet.x) * uNet.y), 0.0, 0.0, ${net ? '1.0' : '0.0'});`,
+        )
+    }
+    m.customProgramCacheKey = () => (net ? 'film' : 'film-fond')
+    return m
+  }
+  const matFacade = film(new THREE.MeshLambertMaterial({ map: facC, normalMap: facN, normalScale: new THREE.Vector2(1.1, 1.1), vertexColors: true, emissive: 0xffffff, emissiveMap: facE, emissiveIntensity: 0 }))
+  const matTole = film(new THREE.MeshLambertMaterial({ map: toleC, normalMap: toleN, normalScale: new THREE.Vector2(0.9, 0.9), vertexColors: true, side: THREE.DoubleSide }))
+  const matPlein = film(new THREE.MeshLambertMaterial({ vertexColors: true }))
+  const matBeton = film(new THREE.MeshLambertMaterial({ map: beton, vertexColors: true }))
+  const matFer = film(new THREE.MeshLambertMaterial({ alphaMap: fer, alphaTest: 0.5, vertexColors: true, side: THREE.DoubleSide }))
+  const matSol = film(new THREE.MeshStandardMaterial({ map: solC, normalMap: solN, normalScale: new THREE.Vector2(1, 1), roughnessMap: solR, roughness: 1, emissive: 0xffffff, emissiveMap: solE, emissiveIntensity: 0 }))
+  const matCotes = film(new THREE.MeshLambertMaterial({ map: cotes }))
+  const matSocle = film(new THREE.MeshLambertMaterial({ color: '#2a201a' }))
 
   const facades = new Lot()
   const toles = new Lot()
@@ -253,9 +288,34 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v
   }
 
+  const repos = { az: 0.16, el: 0.74, d: 1 }
+  // la porte de la galerie : le milieu de sa plus longue façade sur rue, et le sens de la rue
+  const porte = (() => {
+    const m = D.maisons.find(q => q.g)
+    let mieux = { x: D.galerie[0], z: D.galerie[1], nx: 0, nz: 1, l: 0 }
+    if (m)
+      m.p.forEach((a, i) => {
+        const b = m.p[(i + 1) % m.p.length]
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1])
+        if (m.f[i] && l > mieux.l) mieux = { x: (a[0] + b[0]) / 2, z: (a[1] + b[1]) / 2, nx: (b[1] - a[1]) / l, nz: -(b[0] - a[0]) / l, l }
+      })
+    return mieux
+  })()
+  const azPorte = (() => {
+    let a = Math.atan2(porte.nx, porte.nz)
+    while (a - repos.az > Math.PI) a -= Math.PI * 2
+    while (a - repos.az < -Math.PI) a += Math.PI * 2
+    return a
+  })()
+  // Les maisons sont construites des plus proches du regard aux plus lointaines : le GPU écarte ainsi,
+  // avant de les colorer, presque tous les murs cachés par d'autres.
+  const azTri = repos.az * 0.3 + azPorte * 0.7
+  const ordre = [...D.maisons].sort((a, b) => b.c[0] * Math.sin(azTri) + b.c[1] * Math.cos(azTri) - (a.c[0] * Math.sin(azTri) + a.c[1] * Math.cos(azTri)))
+
   // ---------- les maisons ----------
+  let mesure = { ms: 0, allegement: 1 }
   let tranche = 0
-  for (const m of D.maisons) {
+  for (const m of ordre) {
     if (m.t === 1) continue
     if (++tranche % 24 === 0) await souffle()
     const y0 = hauteur(m.c[0], m.c[1]) + 0.02
@@ -429,9 +489,10 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     }
   }
 
+  jalon('maisons')
   await souffle()
   // ---------- le Marché en fer ----------
-  for (const m of D.maisons.filter(q => q.t === 1)) {
+  for (const m of ordre.filter(q => q.t === 1)) {
     const y0 = hauteur(m.c[0], m.c[1]) + 0.05
     const { cx, cz, ux, uz, hl, hw } = rectangle(m.p)
     const vx = -uz
@@ -545,19 +606,23 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
 
   const groupe = new THREE.Group()
   scene.add(groupe)
-  const ajouter = (lot: Lot, mat: THREE.Material) => {
+  // ordre de dessin : ce qui cache d'abord (toits, murs), ce qui est caché ensuite (le sol en dernier)
+  const RANG = { toit: 0, mur: 1, detail: 2, petit: 3, feuilles: 5, sol: 8, socle: 9 }
+  const ajouter = (lot: Lot, mat: THREE.Material, rang: number) => {
     const me = new THREE.Mesh(lot.geometrie(), mat)
     me.castShadow = true
     me.receiveShadow = true
+    me.renderOrder = rang
     groupe.add(me)
     return me
   }
-  ajouter(facades, matFacade)
-  ajouter(toles, matTole)
-  ajouter(pleins, matPlein)
-  ajouter(betons, matBeton)
-  ajouter(fers, matFer).customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, alphaMap: fer, alphaTest: 0.5 })
+  ajouter(toles, matTole, RANG.toit)
+  ajouter(betons, matBeton, RANG.toit)
+  ajouter(facades, matFacade, RANG.mur)
+  ajouter(pleins, matPlein, RANG.detail)
+  ajouter(fers, matFer, RANG.detail).customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, alphaMap: fer, alphaTest: 0.5 })
 
+  jalon('marché et wharf')
   // ---------- le sol et le socle ----------
   {
     const g = new THREE.PlaneGeometry(B, B, GR, GR)
@@ -566,6 +631,7 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     for (let i = 0; i < pos.count; i++) pos.setY(i, relief[i])
     g.computeVertexNormals()
     const sol = new THREE.Mesh(g, matSol)
+    sol.renderOrder = RANG.sol
     sol.receiveShadow = true
     sol.castShadow = true
     groupe.add(sol)
@@ -593,17 +659,20 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     seg(-h, -h, -h, h, 3, [-1, 0, 0])
     const flancs = new THREE.Mesh(lot.geometrie(), matCotes)
     flancs.castShadow = true
+    flancs.renderOrder = RANG.socle
     flancs.receiveShadow = true
     groupe.add(flancs)
 
     // plinthe de bois sombre, filet de laiton
     const pl = new THREE.Mesh(new THREE.BoxGeometry(B + 7, 13, B + 7), matSocle)
     pl.position.y = -T - 6.5
+    pl.renderOrder = RANG.socle
     pl.castShadow = true
     pl.receiveShadow = true
     groupe.add(pl)
-    const laiton = new THREE.Mesh(new THREE.BoxGeometry(B + 7.6, 0.7, B + 7.6), new THREE.MeshLambertMaterial({ color: '#94702f' }))
+    const laiton = new THREE.Mesh(new THREE.BoxGeometry(B + 7.6, 0.7, B + 7.6), film(new THREE.MeshLambertMaterial({ color: '#94702f' })))
     laiton.position.y = -T - 0.3
+    laiton.renderOrder = RANG.socle
     groupe.add(laiton)
 
     // ombre douce sous l’objet : celle d’un socle posé, pas un halo
@@ -613,12 +682,13 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     ctx.filter = 'blur(22px)'
     ctx.fillStyle = 'rgba(18,12,6,.72)'
     ctx.fillRect(66, 66, 380, 380)
-    const ombre = new THREE.Mesh(new THREE.PlaneGeometry(B * 1.38, B * 1.38), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, toneMapped: false }))
+    const ombre = new THREE.Mesh(new THREE.PlaneGeometry(B * 1.38, B * 1.38), film(new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }), false))
     ombre.rotation.x = -Math.PI / 2
     ombre.position.set(2.5, -T - 13.1, 3.5)
     scene.add(ombre)
   }
 
+  jalon('sol')
   await souffle()
   // ---------- clôtures, poteaux, passants ----------
   {
@@ -659,10 +729,10 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     }
     const gf = new THREE.BufferGeometry()
     gf.setAttribute('position', new THREE.Float32BufferAttribute(fil, 3))
-    groupe.add(new THREE.LineSegments(gf, new THREE.LineBasicMaterial({ color: 0x14130f, transparent: true, opacity: 0.55 })))
+    groupe.add(new THREE.LineSegments(gf, film(new THREE.LineBasicMaterial({ color: 0x14130f, transparent: true, opacity: 0.44 }))))
 
-    const corps = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.24, 1.0, 2, 8), new THREE.MeshLambertMaterial(), D.gens.length)
-    const tetes = new THREE.InstancedMesh(new THREE.SphereGeometry(0.17, 10, 8), new THREE.MeshLambertMaterial({ color: '#3a271b' }), D.gens.length)
+    const corps = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.24, 1.0, 2, 8), film(new THREE.MeshLambertMaterial()), D.gens.length)
+    const tetes = new THREE.InstancedMesh(new THREE.SphereGeometry(0.17, 10, 8), film(new THREE.MeshLambertMaterial({ color: '#3a271b' })), D.gens.length)
     corps.castShadow = true
     const hab = ['#d83a34', '#f2c230', '#1f8a70', '#2b67b7', '#f4efe2', '#c32f83', '#2a2b33', '#e07a2f', '#f8f6ef'].map(h => new THREE.Color(h))
     const M = new THREE.Matrix4()
@@ -674,9 +744,11 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       M.makeTranslation(x, y + 1.78, z)
       tetes.setMatrixAt(i, M)
     })
+    corps.renderOrder = tetes.renderOrder = RANG.petit
     groupe.add(corps, tetes)
   }
 
+  jalon('rues')
   await souffle()
   // ---------- arbres : couronnes de feuilles ----------
   const verts = ['#2d5a30', '#376436', '#426f38', '#29502f', '#4e7a3c', '#335c33', '#5a8040'].map(h => new THREE.Color(h))
@@ -705,12 +777,12 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       lot.quad(a, b, e, f, norm([d[0], d[1] + 0.25, d[2]]), [0, 0, 1, 1], col)
     }
     const geo = lot.geometrie()
-    const mat = new THREE.MeshLambertMaterial({ map: feuilles, alphaTest: 0.45, vertexColors: true, side: THREE.DoubleSide })
+    const mat = film(new THREE.MeshLambertMaterial({ map: feuilles, alphaTest: 0.45, vertexColors: true, side: THREE.DoubleSide }))
     const inst = new THREE.InstancedMesh(geo, mat, D.arbres.length * 2)
     inst.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: feuilles, alphaTest: 0.45 })
     inst.castShadow = true
     inst.receiveShadow = true
-    const troncs = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.32, 1, 7), new THREE.MeshLambertMaterial({ color: '#57412d' }), D.arbres.length)
+    const troncs = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.32, 1, 7), film(new THREE.MeshLambertMaterial({ color: '#57412d' })), D.arbres.length)
     troncs.castShadow = true
     const M = new THREE.Matrix4()
     const Q = new THREE.Quaternion()
@@ -734,6 +806,8 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
         k++
       }
     })
+    inst.renderOrder = RANG.feuilles
+    troncs.renderOrder = RANG.petit
     groupe.add(inst, troncs)
   }
 
@@ -779,12 +853,12 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       }
     }
     const nbp = D.palmiers.length
-    const mP = new THREE.MeshLambertMaterial({ map: palme, alphaTest: 0.4, vertexColors: true, side: THREE.DoubleSide, color: '#4e7a3a' })
+    const mP = film(new THREE.MeshLambertMaterial({ map: palme, alphaTest: 0.4, vertexColors: true, side: THREE.DoubleSide, color: '#4e7a3a' }))
     const iF = new THREE.InstancedMesh(fr.geometrie(), mP, nbp)
     iF.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: palme, alphaTest: 0.4 })
     iF.castShadow = true
     iF.receiveShadow = true
-    const iS = new THREE.InstancedMesh(stipe.geometrie(), new THREE.MeshLambertMaterial({ vertexColors: true }), nbp)
+    const iS = new THREE.InstancedMesh(stipe.geometrie(), film(new THREE.MeshLambertMaterial({ vertexColors: true })), nbp)
     iS.castShadow = true
     const M = new THREE.Matrix4()
     const E = new THREE.Euler()
@@ -795,9 +869,12 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       iF.setMatrixAt(i, M)
       iS.setMatrixAt(i, M)
     })
+    iF.renderOrder = RANG.feuilles
+    iS.renderOrder = RANG.petit
     groupe.add(iF, iS)
   }
 
+  jalon('végétation')
   await souffle()
   // ---------- canots et tap-taps ----------
   {
@@ -814,7 +891,7 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       }
       lot.quad([x0, 0.3, -w0 * 0.9], [x1, 0.3, -w1 * 0.9], [x1, 0.3, w1 * 0.9], [x0, 0.3, w0 * 0.9], [0, 1, 0], [0, 0, 1, 1], fois(BLANC, 0.5))
     }
-    const inst = new THREE.InstancedMesh(lot.geometrie(), new THREE.MeshLambertMaterial({ vertexColors: true }), D.canots.length)
+    const inst = new THREE.InstancedMesh(lot.geometrie(), film(new THREE.MeshLambertMaterial({ vertexColors: true })), D.canots.length)
     inst.castShadow = true
     const couleurs = ['#c23a2c', '#e9c64a', '#f1ede2', '#2e7f79', '#2d4f8e', '#e07a2f'].map(h => new THREE.Color(h))
     const M = new THREE.Matrix4()
@@ -826,6 +903,7 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       inst.setMatrixAt(i, M)
       inst.setColorAt(i, couleurs[Math.floor(c * 6) % 6])
     })
+    inst.renderOrder = RANG.petit
     groupe.add(inst)
 
     const v = new Lot()
@@ -835,7 +913,7 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     v.boite(0.9, 2.42, 0, 4.2, 0.14, 2.3, 0, fois(BLANC, 1.1))
     v.boite(-1.75, 1.45, 0, 0.8, 0.5, 1.92, 0, lin('#27313a'))
     for (const q of [-1.9, 1.7]) for (const s of [-1, 1]) v.boite(q, 0.42, s * 1.02, 0.86, 0.84, 0.3, 0, noir)
-    const vi = new THREE.InstancedMesh(v.geometrie(), new THREE.MeshLambertMaterial({ vertexColors: true }), D.vehicules.length)
+    const vi = new THREE.InstancedMesh(v.geometrie(), film(new THREE.MeshLambertMaterial({ vertexColors: true })), D.vehicules.length)
     vi.castShadow = true
     const tap = ['#d83a34', '#f2c230', '#1f8a70', '#2b67b7', '#f07f2e', '#c32f83', '#f4efe2'].map(h => new THREE.Color(h))
     D.vehicules.forEach(([x, z, a, c], i) => {
@@ -844,9 +922,11 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       vi.setMatrixAt(i, M)
       vi.setColorAt(i, tap[Math.floor(c * 7) % 7])
     })
+    vi.renderOrder = RANG.petit
     groupe.add(vi)
   }
 
+  jalon('canots et tap-taps')
   // ---------- lumière ----------
   const sun = new THREE.DirectionalLight('#fff0dc', 3.4)
   sun.castShadow = true
@@ -891,52 +971,34 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
 
   // ---------- caméra ----------
   const camera = new THREE.PerspectiveCamera(24, 1, 20, 8000)
-  const repos = { az: 0.16, el: 0.74, d: 1 }
   const etat = { sx: 0, sy: 0, csx: 0, csy: 0, pas: 0, cpas: 0 }
   const cible = new THREE.Vector3()
   const galerie = new THREE.Vector3(D.galerie[0], yGal, D.galerie[1])
-  // la porte de la galerie : le milieu de sa plus longue façade sur rue, et le sens de la rue
-  const porte = (() => {
-    const m = D.maisons.find(q => q.g)
-    let mieux = { x: D.galerie[0], z: D.galerie[1], nx: 0, nz: 1, l: 0 }
-    if (m)
-      m.p.forEach((a, i) => {
-        const b = m.p[(i + 1) % m.p.length]
-        const l = Math.hypot(b[0] - a[0], b[1] - a[1])
-        if (m.f[i] && l > mieux.l) mieux = { x: (a[0] + b[0]) / 2, z: (a[1] + b[1]) / 2, nx: (b[1] - a[1]) / l, nz: -(b[0] - a[0]) / l, l }
-      })
-    return mieux
-  })()
-  const azPorte = (() => {
-    let a = Math.atan2(porte.nx, porte.nz)
-    while (a - repos.az > Math.PI) a -= Math.PI * 2
-    while (a - repos.az < -Math.PI) a += Math.PI * 2
-    return a
-  })()
-  const yRue = hauteur(porte.x, porte.z) + 2.4
+  const visGalerie = new THREE.Vector3(D.galerie[0], hauteur(D.galerie[0], D.galerie[1]) + 2.5, D.galerie[1])
+  const visPorte = new THREE.Vector3(porte.x, hauteur(porte.x, porte.z) + 2.4, porte.z)
+  // Tailles lues une fois par redimensionnement : les demander à chaque image obligerait le navigateur à tout remesurer.
+  const vue = { l: 1, h: 1, dpr: 1, echelle: 1 }
   let aRendre = true
   let raf = 0
   let vivant = true
+  const lisse = (t: number) => {
+    const x = Math.min(1, Math.max(0, t))
+    return x * x * (3 - 2 * x)
+  }
 
   function placerCamera() {
-    const W = canvas.clientWidth || 1
-    const Hc = canvas.clientHeight || 1
-    camera.aspect = W / Hc
-    // à l’écran, le socle occupe `echelle()` de la hauteur du canevas
+    camera.aspect = vue.l / vue.h
+    // à l’écran, le socle occupe `echelle` de la hauteur du canevas
     const tan = Math.tan((camera.fov * Math.PI) / 360)
-    const dist0 = (B * 0.86) / (options.echelle() * tan)
+    const dist0 = (B * 0.86) / (vue.echelle * tan)
     const p = etat.cpas
-    const lisse = (t: number) => {
-      const x = Math.min(1, Math.max(0, t))
-      return x * x * (3 - 2 * x)
-    }
     const e_ = lisse(p / 0.76) // la descente dans les rues
     const e2 = lisse((p - 0.68) / 0.32) // puis la poussée vers la porte
     const d = dist0 * Math.pow(0.085, e_) * Math.pow(0.26, e2)
     const souris = 1 - e_ * 0.72
     const az = repos.az + (azPorte - repos.az) * lisse(p / 0.9) + etat.csx * 0.11 * souris
     const el = repos.el + etat.csy * 0.055 * souris - e_ * 0.33 - e2 * 0.07
-    cible.set(0, -12, 14).lerp(new THREE.Vector3(D.galerie[0], hauteur(D.galerie[0], D.galerie[1]) + 2.5, D.galerie[1]), e_).lerp(new THREE.Vector3(porte.x, yRue, porte.z), e2)
+    cible.set(0, -12, 14).lerp(visGalerie, e_).lerp(visPorte, e2)
     camera.position.set(cible.x + Math.sin(az) * Math.cos(el) * d, cible.y + Math.sin(el) * d, cible.z + Math.cos(az) * Math.cos(el) * d)
     camera.near = Math.max(4, d * 0.2)
     camera.far = d + B * 4
@@ -945,67 +1007,95 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
   }
 
   // ---------- le rendu : profondeur de champ de macro, sortie filmique ----------
-  const opts = { type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: true }
-  const rtScene = new THREE.WebGLRenderTarget(4, 4, { ...opts, samples: 3, depthTexture: new THREE.DepthTexture(4, 4) })
-  const rtA = new THREE.WebGLRenderTarget(4, 4, { ...opts, depthBuffer: false })
-  const rtB = new THREE.WebGLRenderTarget(4, 4, { ...opts, depthBuffer: false })
-  const plein = new THREE.Mesh(new THREE.PlaneGeometry(2, 2))
+  // Un jeu de cibles : la scène (deux sorties anticrénelées, la couleur développée en 8 bits sRGB et la netteté)
+  // et deux demi-images pour le flou. La profondeur n'est jamais « résolue » : ce chemin coûte plusieurs millisecondes
+  // par image sur un GPU intégré.
+  type Jeu = { k: number; scene: THREE.WebGLRenderTarget; a: THREE.WebGLRenderTarget; b: THREE.WebGLRenderTarget }
+  const jeu = (k: number): Jeu => {
+    const sc = new THREE.WebGLRenderTarget(4, 4, { count: 2, samples: 4, depthBuffer: true, resolveDepthBuffer: false, type: THREE.UnsignedByteType, format: THREE.RGBAFormat })
+    sc.textures[0].colorSpace = THREE.SRGBColorSpace
+    sc.textures[1].format = THREE.RedFormat
+    const demi = () => {
+      const r = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false, type: THREE.UnsignedByteType, format: THREE.RGBAFormat })
+      r.texture.colorSpace = THREE.SRGBColorSpace
+      return r
+    }
+    return { k, scene: sc, a: demi(), b: demi() }
+  }
+  const jeter = (j: Jeu) => {
+    j.scene.dispose()
+    j.a.dispose()
+    j.b.dispose()
+  }
+  /** L'image à pleine définition : toujours celle qu'on voit à l'arrêt. */
+  const jeuNet = jeu(1)
+  /** Sur un appareil qui ne tiendrait pas 60 images par seconde, une image un peu plus petite pendant que le défilement va vite. */
+  let jeuVif: Jeu | null = null
+  let dernier = jeuNet
+
+  const ecran = new THREE.Mesh(new THREE.PlaneGeometry(2, 2))
   const scenePost = new THREE.Scene()
-  scenePost.add(plein)
+  scenePost.add(ecran)
   const camPost = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
   const VS = 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }'
+  // Les images gardées sont développées ; pour les mêler comme de la lumière, on les « redéveloppe à l'envers » d'abord.
+  const COURBE = `
+      vec3 aces(vec3 x){ return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.); }
+      vec3 brut(vec3 y){ y = min(y, vec3(1.)); vec3 q = .59*y-.03; vec3 k = 2.51-2.43*y; return (q+sqrt(q*q+.56*y*k))/(2.*k); }
+      vec4 lumiere(sampler2D s, vec2 uv){ vec4 c = texture2D(s,uv); return vec4(brut(c.rgb/max(c.a,1e-4))*c.a, c.a); }
+      vec4 developpe(vec4 c){ return vec4(aces(c.rgb/max(c.a,1e-4))*c.a, c.a); }`
   const flou = new THREE.ShaderMaterial({
     vertexShader: VS,
     uniforms: { t: { value: null }, dir: { value: new THREE.Vector2() } },
-    fragmentShader: `uniform sampler2D t; uniform vec2 dir; varying vec2 vUv;
-      void main(){ vec4 c = texture2D(t,vUv)*.227;
-        c += (texture2D(t,vUv+dir*1.385)+texture2D(t,vUv-dir*1.385))*.316;
-        c += (texture2D(t,vUv+dir*3.231)+texture2D(t,vUv-dir*3.231))*.0703;
-        gl_FragColor=c; }`,
+    fragmentShader: `uniform sampler2D t; uniform vec2 dir; varying vec2 vUv;${COURBE}
+      void main(){ vec4 c = lumiere(t,vUv)*.227;
+        c += (lumiere(t,vUv+dir*1.385)+lumiere(t,vUv-dir*1.385))*.316;
+        c += (lumiere(t,vUv+dir*3.231)+lumiere(t,vUv-dir*3.231))*.0703;
+        gl_FragColor=developpe(c); }`,
     depthTest: false,
     depthWrite: false,
+    blending: THREE.NoBlending,
   })
   const finale = new THREE.ShaderMaterial({
     vertexShader: VS,
-    uniforms: { t: { value: null }, b: { value: null }, d: { value: null }, near: { value: 1 }, far: { value: 10 }, focus: { value: 100 }, plage: { value: 100 }, expo: { value: 1.0 } },
-    fragmentShader: `uniform sampler2D t,b,d; uniform float near,far,focus,plage,expo; varying vec2 vUv;
-      vec3 aces(vec3 x){ return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.); }
+    uniforms: { t: { value: null }, b: { value: null }, n: { value: null } },
+    fragmentShader: `uniform sampler2D t,b,n; varying vec2 vUv;${COURBE}
       vec3 srgb(vec3 c){ return mix(c*12.92, 1.055*pow(c,vec3(1./2.4))-.055, step(.0031308,c)); }
       void main(){
-        float z = texture2D(d,vUv).x;
-        float vz = (near*far)/((far-near)*z-far);
-        float coc = smoothstep(.0,1.,abs(-vz-focus)/plage);
-        if (z>=1.) coc = 1.;
-        vec4 c = mix(texture2D(t,vUv), texture2D(b,vUv), coc);
-        float a = max(c.a,1e-4);
-        vec3 col = c.rgb/a*expo;
-        col = aces(col);
-        gl_FragColor = vec4(srgb(col)*c.a, c.a);
+        float coc = 1. - texture2D(n,vUv).r;
+        vec4 c = texture2D(t,vUv);
+        if (coc > .004) c = developpe(mix(lumiere(t,vUv), lumiere(b,vUv), coc));
+        gl_FragColor = vec4(srgb(c.rgb/max(c.a,1e-4))*c.a, c.a);
       }`,
     depthTest: false,
     depthWrite: false,
     blending: THREE.NoBlending,
   })
 
+  const tailler = (j: Jeu) => {
+    const l = Math.max(2, Math.round(vue.l * vue.dpr * j.k))
+    const h = Math.max(2, Math.round(vue.h * vue.dpr * j.k))
+    j.scene.setSize(l, h)
+    j.a.setSize(l >> 1, h >> 1)
+    j.b.setSize(l >> 1, h >> 1)
+  }
   function dimensionner() {
-    const W = canvas.clientWidth
-    const Hc = canvas.clientHeight
-    const dpr = Math.min(window.devicePixelRatio || 1, options.dprMax ?? (W * Hc > 1.1e6 ? 1.25 : 2))
-    renderer.setPixelRatio(dpr)
-    renderer.setSize(W, Hc, false)
-    rtScene.setSize(W * dpr, Hc * dpr)
-    rtA.setSize((W * dpr) >> 1, (Hc * dpr) >> 1)
-    rtB.setSize((W * dpr) >> 1, (Hc * dpr) >> 1)
+    vue.l = canvas.clientWidth || 1
+    vue.h = canvas.clientHeight || 1
+    vue.echelle = options.echelle()
+    vue.dpr = Math.min(window.devicePixelRatio || 1, options.dprMax ?? (vue.l * vue.h > 1.1e6 ? 1.25 : 2))
+    renderer.setPixelRatio(vue.dpr)
+    renderer.setSize(vue.l, vue.h, false)
+    tailler(jeuNet)
+    if (jeuVif) tailler(jeuVif)
     aRendre = true
   }
 
-  const lerpPlage = () => 0.58 - 0.3 * etat.cpas
-
-  // ne calcule que la zone où se trouve le socle : au repos, un cinquième de l’écran
+  // au repos, le socle n'occupe qu'un cinquième de l'écran : les passes d'image s'y limitent
   const coin = new THREE.Vector3()
-  function zone(): [number, number, number, number] {
-    const W = rtScene.width
-    const Hc = rtScene.height
+  function zone(j: Jeu): [number, number, number, number] {
+    const W = j.scene.width
+    const Hc = j.scene.height
     if (etat.cpas > 0.3) return [0, 0, W, Hc]
     let x0 = 1
     let x1 = -1
@@ -1028,53 +1118,50 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     return [X0, Y0, Math.max(1, X1 - X0), Math.max(1, Y1 - Y0)]
   }
 
-  function peindre() {
-    const [zx, zy, zw, zh] = zone()
-    const dpr = renderer.getPixelRatio()
-    rtScene.scissorTest = true
-    rtScene.scissor.set(zx, zy, zw, zh)
-    rtScene.viewport.set(0, 0, rtScene.width, rtScene.height)
-    for (const q of [rtA, rtB]) {
-      q.scissorTest = true
-      q.scissor.set(zx >> 1, zy >> 1, (zw >> 1) + 2, (zh >> 1) + 2)
-    }
-    renderer.setRenderTarget(rtScene)
+  function peindre(j: Jeu) {
+    const [zx, zy, zw, zh] = zone(j)
+    const partiel = zw < j.scene.width || zh < j.scene.height
+    const dist = camera.position.distanceTo(cible)
+    uNet.value.set(dist, 1 / Math.max(16, dist * (0.58 - 0.3 * etat.cpas))) // profondeur nette étroite : c’est elle qui dit « miniature »
+    // ni ciseau ni effacement partiel sur la cible anticrénelée : ils font quitter au GPU ses chemins rapides
+    renderer.setRenderTarget(j.scene)
     renderer.clear()
     renderer.render(scene, camera)
-    const px = 1 / rtA.width
-    const py = 1 / rtA.height
-    const rayon = (0.72 + etat.cpas * 0.5) * Math.max(1, dpr * 0.8)
-    plein.material = flou
-    let source = rtScene.texture
-    for (const [cx, cy, cible_] of [
-      [rayon, 0, rtA],
-      [0, rayon, rtB],
-      [rayon * 2, 0, rtA],
-      [0, rayon * 2, rtB],
+    for (const q of [j.a, j.b]) {
+      q.scissorTest = partiel
+      q.scissor.set(zx >> 1, zy >> 1, (zw >> 1) + 2, (zh >> 1) + 2)
+    }
+    const px = 1 / j.a.width
+    const py = 1 / j.a.height
+    const rayon = (0.72 + etat.cpas * 0.5) * Math.max(1, vue.dpr * 0.8) * j.k
+    ecran.material = flou
+    let source = j.scene.textures[0]
+    for (const [cx, cy, sortie] of [
+      [rayon, 0, j.a],
+      [0, rayon, j.b],
+      [rayon * 2, 0, j.a],
+      [0, rayon * 2, j.b],
     ] as [number, number, THREE.WebGLRenderTarget][]) {
       flou.uniforms.t.value = source
       flou.uniforms.dir.value.set(px * cx, py * cy)
-      renderer.setRenderTarget(cible_)
-      renderer.clear()
+      renderer.setRenderTarget(sortie)
+      if (partiel) renderer.clear() // hors de la zone, rien : sinon une vieille image baverait sur le bord
       renderer.render(scenePost, camPost)
-      source = cible_.texture
+      source = sortie.texture
     }
-    plein.material = finale
-    finale.uniforms.t.value = rtScene.texture
-    finale.uniforms.b.value = rtB.texture
-    finale.uniforms.d.value = rtScene.depthTexture
-    finale.uniforms.near.value = camera.near
-    finale.uniforms.far.value = camera.far
-    const dist = camera.position.distanceTo(cible)
-    finale.uniforms.focus.value = dist
-    finale.uniforms.plage.value = Math.max(16, dist * lerpPlage()) // profondeur nette étroite : c’est elle qui dit « miniature »
+    ecran.material = finale
+    finale.uniforms.t.value = j.scene.textures[0]
+    finale.uniforms.b.value = j.b.texture
+    finale.uniforms.n.value = j.scene.textures[1]
     renderer.setRenderTarget(null)
     renderer.setScissorTest(false)
-    renderer.clear()
-    renderer.setScissorTest(true)
-    renderer.setScissor(zx / dpr, zy / dpr, zw / dpr, zh / dpr)
+    if (partiel) renderer.clear()
+    renderer.setScissorTest(partiel)
+    const e = vue.dpr * j.k
+    renderer.setScissor(Math.floor(zx / e), Math.floor(zy / e), Math.ceil(zw / e) + 1, Math.ceil(zh / e) + 1)
     renderer.render(scenePost, camPost)
     renderer.setScissorTest(false)
+    dernier = j
   }
 
   function boucle() {
@@ -1084,48 +1171,121 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     etat.csx += (etat.sx - etat.csx) * k
     etat.csy += (etat.sy - etat.csy) * k
     etat.cpas += (etat.pas - etat.cpas) * 0.18
-    const bouge = Math.abs(etat.sx - etat.csx) + Math.abs(etat.sy - etat.csy) + Math.abs(etat.pas - etat.cpas) > 0.0004
-    if (bouge) aRendre = true
+    const elan = Math.abs(etat.pas - etat.cpas)
+    // on s'arrête sur une image nette : après une image allégée, il en faut toujours une dernière à pleine définition
+    if (Math.abs(etat.sx - etat.csx) + Math.abs(etat.sy - etat.csy) + elan > 0.0004 || dernier !== jeuNet) aRendre = true
     if (!aRendre) return
     aRendre = false
     placerCamera()
-    peindre()
+    peindre(jeuVif && elan > 0.004 ? jeuVif : jeuNet)
     options.apresImage?.()
   }
 
   soleil(38, 120, 0.2, false)
   dimensionner()
   placerCamera()
+  jalon('scène prête')
   for (const t of [solC, solN, solR, solE, facC, facN, facE, toleC, toleN, cotes, fer, beton, feuilles, palme]) {
     renderer.initTexture(t)
     await souffle()
   }
-  await renderer.compileAsync(scene, camera)
+  // les programmes sont compilés pour la cible où ils serviront : sinon ils le seraient une seconde fois, d'un bloc, à la première image
+  jalon('textures envoyées')
+  // Tous les programmes sont préparés en arrière-plan, pour la cible où ils serviront. Sans cela ils le seraient d'un
+  // bloc à la première image, page figée : ceux de la scène, mais aussi ceux des ombres et des passes d'image.
+  const temoins = new THREE.Group()
+  for (const o of groupe.children) {
+    if (!(o instanceof THREE.Mesh) || !o.castShadow) continue
+    const m = o.material as THREE.MeshLambertMaterial
+    const d = (o.customDepthMaterial ??= new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking })) as THREE.MeshDepthMaterial
+    // three fera lui-même ces réglages au moment de l'ombre : le programme préparé doit être celui-là
+    d.side = m.side
+    d.alphaMap = m.alphaMap ?? null
+    d.alphaTest = m.alphaTest
+    d.map = m.map ?? null
+    if (o instanceof THREE.InstancedMesh) {
+      const t = new THREE.InstancedMesh(o.geometry, d, o.count)
+      t.instanceMatrix = o.instanceMatrix
+      t.instanceColor = o.instanceColor
+      temoins.add(t)
+    } else temoins.add(new THREE.Mesh(o.geometry, d))
+  }
+  renderer.setRenderTarget(jeuNet.scene)
+  const prets = [renderer.compileAsync(scene, camera), renderer.compileAsync(temoins, camera, scene)]
+  ecran.material = flou
+  renderer.setRenderTarget(jeuNet.a)
+  prets.push(renderer.compileAsync(scenePost, camPost))
+  await Promise.all(prets)
+  ecran.material = finale
+  renderer.setRenderTarget(null)
+  await renderer.compileAsync(scenePost, camPost)
+  jalon('programmes compilés')
   await souffle()
-  peindre()
+  peindre(jeuNet)
+  jalon('première image')
 
-  // banc d’essai : si cet appareil ne tient pas la cadence, l’affiche fixe reste
-  if (options.exigeant) {
-    const temps: number[] = []
-    for (let i = 0; i < 7; i++) {
-      await new Promise(r => requestAnimationFrame(r))
-      const t0 = performance.now()
-      etat.csx = Math.sin(i) * 0.3
-      placerCamera()
-      peindre()
-      renderer.getContext().finish()
-      temps.push(performance.now() - t0)
+  // Banc d’essai, sur une vue chargée (le milieu de la descente). Il décide deux choses : si l’appareil est vraiment
+  // trop lent, l’affiche fixe reste ; s’il est juste, les images du défilement rapide seront un peu allégées.
+  {
+    const gl = renderer.getContext() as WebGL2RenderingContext
+    const chrono = gl.getExtension('EXT_disjoint_timer_query_webgl2')
+    const image = () => new Promise(r => requestAnimationFrame(r))
+    const salve = (n: number, chaque?: (f: () => void) => void) => {
+      for (let i = 0; i < n; i++) {
+        etat.csx = Math.sin(i) * 0.3
+        placerCamera()
+        if (chaque) chaque(() => peindre(jeuNet))
+        else peindre(jeuNet)
+      }
     }
-    etat.csx = 0
-    temps.sort((x, y) => x - y)
-    if (temps[3] > 70) {
+    etat.cpas = 0.5
+    await image()
+    salve(3) // réveille le GPU
+    let t = 0
+    if (chrono) {
+      // le GPU chronomètre lui-même quatre images
+      const q: WebGLQuery[] = []
+      salve(4, f => {
+        const x = gl.createQuery()!
+        gl.beginQuery(chrono.TIME_ELAPSED_EXT, x)
+        f()
+        gl.endQuery(chrono.TIME_ELAPSED_EXT)
+        q.push(x)
+      })
+      for (let i = 0; i < 40 && !gl.getQueryParameter(q[3], gl.QUERY_RESULT_AVAILABLE); i++) await image()
+      const ms = q.filter(x => gl.getQueryParameter(x, gl.QUERY_RESULT_AVAILABLE)).map(x => gl.getQueryParameter(x, gl.QUERY_RESULT) / 1e6).sort((x, y) => x - y)
+      if (ms.length && !gl.getParameter(chrono.GPU_DISJOINT_EXT)) t = ms[ms.length >> 1]
+      for (const x of q) gl.deleteQuery(x)
+    }
+    if (!t) {
+      // à défaut, l'horloge : quatre images à la suite, puis on attend que le GPU ait vraiment fini
+      const pixel = new Uint8Array(4)
+      const t0 = performance.now()
+      salve(4)
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel)
+      t = (performance.now() - t0) / 4 - 1
+    }
+    etat.cpas = etat.csx = 0
+    if (options.exigeant && t > 70) {
       vivant = false
       envRT.dispose()
       pmrem.dispose()
+      jeter(jeuNet)
       renderer.dispose()
       throw new Error('appareil trop lent')
     }
+    // Mesurée ainsi, à froid, une image coûte environ un tiers de plus qu'en plein défilement. Au-delà de 10 ms réelles
+    // pour la seule maquette, la page entière ne tiendrait pas dans les 16,7 ms d'une image à 60 par seconde.
+    const k = options.allegement === false || t <= 13 ? 1 : t <= 18 ? 0.85 : 0.72
+    if (k < 1) {
+      jeuVif = jeu(k)
+      tailler(jeuVif)
+    }
+    mesure = { ms: +t.toFixed(1), allegement: k }
+    placerCamera()
+    peindre(jeuNet)
   }
+  jalon('banc d’essai')
   raf = requestAnimationFrame(boucle)
 
   const v = new THREE.Vector3()
@@ -1139,20 +1299,20 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     dimensionner,
     pointGalerie() {
       v.copy(galerie).project(camera)
-      return { x: (v.x * 0.5 + 0.5) * canvas.clientWidth, y: (-v.y * 0.5 + 0.5) * canvas.clientHeight }
+      return { x: (v.x * 0.5 + 0.5) * vue.l, y: (-v.y * 0.5 + 0.5) * vue.h }
     },
-    rendre() {
+    rendre(allegee = false) {
       placerCamera()
-      peindre()
+      peindre(allegee && jeuVif ? jeuVif : jeuNet)
     },
+    mesure: () => mesure,
     detruire() {
       vivant = false
       cancelAnimationFrame(raf)
       envRT.dispose()
       pmrem.dispose()
-      rtScene.dispose()
-      rtA.dispose()
-      rtB.dispose()
+      jeter(jeuNet)
+      if (jeuVif) jeter(jeuVif)
       renderer.dispose()
     },
   }

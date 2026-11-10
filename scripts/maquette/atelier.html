@@ -8,7 +8,7 @@
   import { creerMaquette } from '/src/maquette/scene.ts'
   const q = new URLSearchParams(location.search)
   const e = +(q.get('e') ?? 1)
-  const m = await creerMaquette(document.getElementById('c'), { echelle: () => e, dprMax: 1 })
+  const m = await creerMaquette(document.getElementById('c'), { echelle: () => e, dprMax: 1, allegement: false })
   if (q.has('nuit')) m.soleil(0, 150, 0, true)
   window.__m = m
   setTimeout(() => (window.__pret = true), 700)

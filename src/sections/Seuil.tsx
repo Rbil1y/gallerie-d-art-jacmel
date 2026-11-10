@@ -1,8 +1,8 @@
 // Le seuil. On a passé la porte : Jacmel en miniature, exactement dans l’axe de l’ouverture.
 // Terre à gauche, Mer à droite. Une affiche s’affiche d’abord, puis la vraie 3D prend le relais.
 // Le défilement écarte le titre, descend dans les rues jusqu’à la porte du point rouge, et l’on entre : le mur de la section suivante.
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { motion, useMotionValueEvent, useScroll } from 'motion/react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useMotionValueEvent, useScroll } from 'motion/react'
 import { Picture } from '../components/Picture'
 import { Dot } from '../components/RedDot'
 import { ArrowDown } from '../components/Icons'
@@ -120,7 +120,20 @@ export function Seuil({ entered }: { entered: boolean }) {
     maquette.current?.soleil(light.elevation, light.azimuth, 1 - smooth(4, 40, light.elevation), light.night)
   }, [vivante, light.elevation, light.azimuth, light.night])
 
-  useMotionValueEvent(scrollYProgress, 'change', p => maquette.current?.regler({ pas: p }))
+  // Le défilement n'est donné qu'aux éléments qui s'en servent. Posé sur la salle entière, il ferait recalculer
+  // tout ce qu'elle contient, et repeindre le mur, à chaque image.
+  const suiveurs = useRef<HTMLElement[]>([])
+  useEffect(() => {
+    if (fixe) return
+    suiveurs.current = [...(salle.current?.querySelectorAll<HTMLElement>('[data-pas]') ?? [])]
+    const v = scrollYProgress.get().toFixed(4)
+    for (const el of suiveurs.current) el.style.setProperty('--p', v)
+  }, [fixe, scrollYProgress])
+  useMotionValueEvent(scrollYProgress, 'change', p => {
+    maquette.current?.regler({ pas: p })
+    const v = p.toFixed(4)
+    for (const el of suiveurs.current) el.style.setProperty('--p', v)
+  })
 
   useEffect(() => {
     if (!posee || fixe || !finePointer()) return
@@ -135,15 +148,15 @@ export function Seuil({ entered }: { entered: boolean }) {
 
   return (
     <section ref={section} id="seuil" data-room="seuil" className={`seuil ${entered ? 'is-entered' : ''} ${fixe ? 'seuil--fixe' : ''} ${vivante ? 'is-vivante' : ''}`} aria-labelledby="seuil-titre">
-      <motion.div ref={salle} className="seuil__salle" style={fixe ? undefined : ({ '--p': scrollYProgress } as unknown as CSSProperties)}>
+      <div ref={salle} className="seuil__salle">
         <span className="seuil__mur" aria-hidden />
 
         <h1 id="seuil-titre" className="seuil__titre">
           <span className="sr-only">Terre / Mer — exposition à la Gallerie d’art de Jacmel</span>
-          <span className="seuil__mot seuil__mot--terre display" aria-hidden>
+          <span className="seuil__mot seuil__mot--terre display" data-pas aria-hidden>
             <span>Terre</span>
           </span>
-          <span className="seuil__mot seuil__mot--mer display" aria-hidden>
+          <span className="seuil__mot seuil__mot--mer display" data-pas aria-hidden>
             <span>
               <i>Mer</i>
             </span>
@@ -151,7 +164,7 @@ export function Seuil({ entered }: { entered: boolean }) {
         </h1>
 
         <div ref={pres} className="seuil__pres">
-          <div className="seuil__proche">
+          <div className="seuil__proche" data-pas>
             <div ref={affiche} className="seuil__affiche">
               <div className="seuil__pose">
                 <Picture
@@ -167,7 +180,7 @@ export function Seuil({ entered }: { entered: boolean }) {
             </div>
           </div>
           <button type="button" className="seuil__cadre" onClick={() => go('comptoir')} aria-label="Préparer sa visite : la galerie, au cœur de Jacmel" />
-          <p className="seuil__cartel ui">
+          <p className="seuil__cartel ui" data-pas>
             <span>
               <i>Jacmel en miniature</i>
             </span>
@@ -175,14 +188,14 @@ export function Seuil({ entered }: { entered: boolean }) {
           </p>
         </div>
 
-        <canvas ref={toile} className="seuil__toile" aria-hidden />
-        <span ref={point} className="seuil__point" aria-hidden>
+        <canvas ref={toile} className="seuil__toile" data-pas aria-hidden />
+        <span ref={point} className="seuil__point" data-pas aria-hidden>
           <Dot />
         </span>
 
-        <span className="seuil__voile" aria-hidden />
+        <span className="seuil__voile" data-pas aria-hidden />
 
-        <div className="seuil__pied">
+        <div className="seuil__pied" data-pas>
           <p className="seuil__dek">{EXPO.dek}</p>
           <button type="button" className="seuil__entrer" onClick={() => go('salle-1')}>
             <span>Entrer dans l’exposition</span>
@@ -193,7 +206,7 @@ export function Seuil({ entered }: { entered: boolean }) {
             <span>{EXPO.dates}</span>
           </p>
         </div>
-      </motion.div>
+      </div>
     </section>
   )
 }

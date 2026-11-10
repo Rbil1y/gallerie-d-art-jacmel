@@ -4,12 +4,6 @@
    --p : 0 → 1, les quelques pas de défilement vers l’œuvre.
    ============================================================ */
 
-@property --survol {
-  syntax: '<number>';
-  inherits: true;
-  initial-value: 0;
-}
-
 .seuil {
   --pas: 125svh;
   --piece: min(56svh, 35vw);
@@ -22,7 +16,6 @@
 }
 .seuil--fixe {
   --pas: 0px;
-  --survol: 1;
 }
 
 .seuil__salle {
@@ -38,12 +31,7 @@
   align-items: center;
   padding-inline: var(--gutter);
   background: var(--wall);
-  transition: --survol 0.55s var(--settle);
 }
-.seuil__salle:has(.seuil__cadre:hover, .seuil__cadre:focus-visible) {
-  --survol: 1;
-}
-
 /* le mur : l’enduit de la façade, repeint en blanc ; une lumière qui s’éteint vers les coins */
 .seuil__mur {
   position: absolute;
@@ -242,39 +230,6 @@
   background: var(--wall);
   pointer-events: none;
   opacity: calc((var(--p) - 0.84) * 6.4);
-}
-
-/* le cartel ne se lit que de près : au survol, ou après quelques pas */
-.seuil__cartel {
-  position: absolute;
-  top: calc(100% + clamp(12px, 2vh, 20px));
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0;
-  z-index: 3;
-  padding: 7px 10px;
-  border-radius: 3px;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  color: var(--ink-2);
-  font-size: var(--fs-small);
-  opacity: min(max(calc((var(--p) - 0.42) * 3), var(--survol)), calc((0.8 - var(--p)) * 9));
-  transform: translate3d(0, calc((1 - max(var(--p), var(--survol))) * 6px + var(--piece) * var(--p) * 0.05), 0);
-}
-.seuil__cartel span:first-child {
-  transform: translate3d(calc(var(--piece) * var(--p) * -0.05), 0, 0);
-}
-.seuil__cartel span:last-child {
-  transform: translate3d(calc(var(--piece) * var(--p) * 0.05), 0, 0);
-}
-.seuil__cartel i {
-  font-family: var(--font-voice);
-  font-size: 1.08em;
-  color: var(--ink);
 }
 
 /* ---------- le pied : trois colonnes, les mêmes que le titre ---------- */

@@ -12,7 +12,6 @@ import { useLight } from '../state/light'
 import { useGo } from '../state/navigate'
 import { appareilModeste, finePointer, reducedMotion } from '../lib/motion'
 import { etatExposition } from '../lib/jacmel'
-import { fr } from '../lib/fr'
 import type { Maquette } from '../maquette/scene'
 
 /** Le temps que la porte finisse de s’ouvrir et que l’affiche se pose. */
@@ -180,12 +179,6 @@ export function Seuil({ entered }: { entered: boolean }) {
             </div>
           </div>
           <button type="button" className="seuil__cadre" onClick={() => go('comptoir')} aria-label="Préparer sa visite : la galerie, au cœur de Jacmel" />
-          <p className="seuil__cartel ui" data-pas>
-            <span>
-              <i>Jacmel en miniature</i>
-            </span>
-            <span>{fr(`${MAQUETTE.maisons} maisons à leur vraie place. La nôtre porte le point rouge.`)}</span>
-          </p>
         </div>
 
         <canvas ref={toile} className="seuil__toile" data-pas aria-hidden />

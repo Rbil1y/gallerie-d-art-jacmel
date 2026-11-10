@@ -147,7 +147,8 @@ function rectangle(p: P2[]) {
   return best
 }
 
-const TEINTES_TOLE = ['#b4654a', '#d2d3ce', '#bb6a4d', '#c9cac4', '#a9503c', '#6fa39a', '#d9d9d4', '#94a37e']
+// vu du ciel (vol de drone du 16 octobre 2026) : la tôle grise domine, puis la rouge ; un peu de rouille, de bleu, de vert d'eau
+const TEINTES_TOLE = ['#c9cac4', '#d2d3ce', '#b7bab6', '#a9503c', '#b4654a', '#86654f', '#5f86ae', '#6fa39a']
 const TEINTES_BOIS = ['#f4eee0', '#2e8c86', '#f4eee0', '#e9c98e', '#f4eee0', '#3f7a4a']
 const HAUT_ETAGE = 3.75
 const BAIE = 3.2
@@ -330,7 +331,7 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     const hMurs = H * m.e
     const R = rectangle(m.p)
     const rectangulaire = m.s / (4 * R.hl * R.hw) > 0.8 && R.hl < 44
-    const pente = rectangulaire && !m.tp && (m.n || m.t > 1 || r2 > 0.3)
+    const pente = rectangulaire && !m.tp && (m.n || m.t > 1 || r2 > 0.4) // quatre maisons ordinaires sur dix en toit-terrasse
     const teinteMur = m.mc ? lin(m.mc) : BLANC
     const hPar = pente ? 0 : 0.55
 
@@ -504,8 +505,11 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     const ang = Math.atan2(uz, ux)
     const P = (a: number, b: number, y: number): V => [cx + ux * a + vx * b, y, cz + uz * a + vz * b]
     const H1 = 7.2
-    const vert = lin('#2f7a72')
-    const toit = lin('#a9503c')
+    // après l'incendie de 2025 : une moitié n'est plus qu'une charpente noircie, l'autre garde son toit rouillé
+    const brule = m.fo === 'brule'
+    const vert = lin(brule ? '#2c6c64' : '#2f7a72')
+    const toit = lin(brule ? '#8b4a36' : '#a9503c')
+    const charbon = lin('#2b2521')
     // dallage et étals
     const dal = P(0, 0, y0)
     pleins.boite(dal[0], y0 + 0.12, dal[2], hl * 2, 0.24, hw * 2, ang, lin('#b9ad98'))
@@ -515,8 +519,12 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     for (let i = 1; i < nA; i++)
       for (let j = 1; j < nB; j++) {
         const q = P(-hl + (2 * hl * i) / nA, -hw + (2 * hw * j) / nB, 0)
-        const h = 1.2 + hache(i, j) * 1.5
-        pleins.boite(q[0], y0 + 0.24 + h / 2, q[2], 3.6, h, 2.2, ang, lin(etal[(i * 3 + j * 5) % 6]))
+        // fermé depuis l'incendie : plus d'étals, seulement leurs socles de béton
+        if (brule) pleins.boite(q[0], y0 + 0.5, q[2], 1.2, 0.55, 1.2, ang, lin('#a39b8e'))
+        else {
+          const h = 1.2 + hache(i, j) * 1.5
+          pleins.boite(q[0], y0 + 0.24 + h / 2, q[2], 3.6, h, 2.2, ang, lin(etal[(i * 3 + j * 5) % 6]))
+        }
       }
     // arcades de fer tout autour
     const bords: [number, number, number, number, number][] = [
@@ -552,25 +560,59 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       const q = norm(cross(sub(b, a), sub(c, a)))
       return dot(q, up) < 0 ? ([-q[0], -q[1], -q[2]] as V) : q
     }
+    // la couverture s'arrête au milieu quand l'autre moitié a brûlé
+    const fin = brule ? 0 : A
+    /** une poutre de la charpente, de a à b : sa face de dessus et un flanc */
+    const poutre = (a: V, b: V, larg: number, col: C) => {
+      const w = norm(cross(sub(b, a), up))
+      const e: V = [w[0] * larg * 0.5, w[1] * larg * 0.5, w[2] * larg * 0.5]
+      const a1: V = [a[0] - e[0], a[1] - e[1], a[2] - e[2]]
+      const a2: V = [a[0] + e[0], a[1] + e[1], a[2] + e[2]]
+      const b1: V = [b[0] - e[0], b[1] - e[1], b[2] - e[2]]
+      const b2: V = [b[0] + e[0], b[1] + e[1], b[2] + e[2]]
+      pleins.quad(a1, a2, b2, b1, f(a1, a2, b2), [0, 0, 1, 1], col)
+      const bas = (q: V): V => [q[0], q[1] - 0.38, q[2]]
+      pleins.quad(bas(a1), bas(b1), b1, a1, w, [0, 0, 1, 1], fois(col, 0.8))
+      pleins.quad(bas(b2), bas(a2), a2, b2, [-w[0], -w[1], -w[2]], [0, 0, 1, 1], fois(col, 0.8))
+    }
+    if (brule) {
+      // la charpente nue : fermes tous les 2,6 m, pannes en long
+      for (let a = 0.3; a <= A; a += 2.6)
+        for (const s of [1, -1]) {
+          poutre(P(a, s * W, yE), P(a * 0.96, s * wI, yB), 0.26, charbon)
+          poutre(P(a * 0.96, s * wI, yB), P(a * 0.96, s * wI, yL), 0.22, charbon)
+          poutre(P(a * 0.98, s * (wI + 0.5), yL - 0.1), P(a * 0.98, 0, yR), 0.24, charbon)
+        }
+      for (const [b, y] of [[W, yE], [-W, yE], [wI, yB], [-wI, yB], [wI, yL], [-wI, yL], [0, yR]] as [number, number][]) poutre(P(0, b, y + 0.05), P(A * 0.97, b, y + 0.05), 0.22, charbon)
+      // la cloison de tôle qui ferme la moitié restée couverte
+      const brun = lin('#7b4a38')
+      const n0: V = [ux, 0, uz]
+      for (const s of [1, -1]) {
+        pleins.quad(P(0, s * W, yE - 0.2), P(0, s * wI, yE - 0.2), P(0, s * wI, yB), P(0, s * W, yE), n0, [0, 0, 1, 1], brun)
+        pleins.quad(P(0, s * wI, yE - 0.2), P(0, 0, yE - 0.2), P(0, 0, yR), P(0, s * wI, yL), n0, [0, 0, 1, 1], brun)
+      }
+    }
     for (const s of [1, -1]) {
       const a = P(-A, s * W, yE)
-      const b = P(A, s * W, yE)
-      const c = P(A * 0.96, s * wI, yB)
+      const b = P(fin, s * W, yE)
+      const c = P(fin * 0.96, s * wI, yB)
       const d = P(-A * 0.96, s * wI, yB)
-      toles.quad(a, b, c, d, f(a, b, c), [0, 0, (2 * A) / 3.2, Math.hypot(W - wI, yB - yE) / 3.2], toit)
+      toles.quad(a, b, c, d, f(a, b, c), [0, 0, (A + fin) / 3.2, Math.hypot(W - wI, yB - yE) / 3.2], toit)
       // lanterne vitrée
       const n: V = norm(sub(P(0, s, 0), P(0, 0, 0)))
       const nL = Math.max(3, Math.round((A * 1.9) / 4))
       for (let k = 0; k < nL; k++) {
         const t0 = (k / nL) * 2 - 1
         const t1 = ((k + 1) / nL) * 2 - 1
+        if (brule && t0 >= 0) continue
         facades.quad(P(A * 0.96 * t1, s * wI, yB), P(A * 0.96 * t0, s * wI, yB), P(A * 0.96 * t0, s * wI, yL), P(A * 0.96 * t1, s * wI, yL), n, tuile(0, 7), BLANC)
       }
       const a2 = P(-A * 0.98, s * (wI + 0.5), yL - 0.1)
-      const b2 = P(A * 0.98, s * (wI + 0.5), yL - 0.1)
-      const c2 = P(A * 0.98, 0, yR)
+      const b2 = P(fin * 0.98, s * (wI + 0.5), yL - 0.1)
+      const c2 = P(fin * 0.98, 0, yR)
       const d2 = P(-A * 0.98, 0, yR)
-      toles.quad(a2, b2, c2, d2, f(a2, b2, c2), [0, 0, (2 * A) / 3.2, Math.hypot(wI, yR - yL) / 3.2], toit)
+      toles.quad(a2, b2, c2, d2, f(a2, b2, c2), [0, 0, (A + fin) / 3.2, Math.hypot(wI, yR - yL) / 3.2], toit)
+      if (brule && s === 1) continue // le pignon de ce côté a brûlé
       // pignon de la lanterne
       const e1 = P(s * A * 0.97, -wI, yL)
       const e2 = P(s * A * 0.97, wI, yL)
@@ -601,6 +643,52 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
         const ang = Math.atan2(bz - az, bx - ax)
         pleins.boite(x, 1.1, z, l / nseg + 0.1, 0.5, 8, ang, lin('#a79f90'))
         for (const s of [-1, 1]) pleins.boite(x - Math.sin(ang) * s * 3.6, 0.3, z + Math.cos(ang) * s * 3.6, 0.5, 1.4, 0.5, 0, lin('#4b4238'))
+      }
+    }
+  }
+
+  // ---------- le cargo amarré le long du wharf (vol de drone du 16 octobre 2026) ----------
+  {
+    let quai: { x: number; z: number; ux: number; uz: number; d: number } | null = null
+    for (const w of D.wharf) {
+      const enMer = w.filter(([x, z]) => Math.abs(x) < B / 2 - 28 && Math.abs(z) < B / 2 - 28 && hauteur(x, z) <= 0.05)
+      if (enMer.length < 2) continue
+      const [ax, az] = enMer[0]
+      const [bx, bz] = enMer[enMer.length - 1]
+      const d = Math.hypot(bx - ax, bz - az)
+      if (!quai || d > quai.d) quai = { x: bx, z: bz, ux: (bx - ax) / (d || 1), uz: (bz - az) / (d || 1), d }
+    }
+    if (quai && quai.d > 24) {
+      const L = Math.min(56, quai.d * 0.95)
+      const ang = Math.atan2(quai.uz, quai.ux)
+      // le long du quai, du côté du large
+      const cx = quai.x - quai.ux * (L / 2 - 7) - quai.uz * 15
+      const cz = quai.z - quai.uz * (L / 2 - 7) + quai.ux * 15
+      const Q = (a: number, b: number): [number, number] => [cx + quai.ux * a - quai.uz * b, cz + quai.uz * a + quai.ux * b]
+      const coque = lin('#7a2b24')
+      const blanc = lin('#ece8de')
+      let q = Q(-L * 0.04, 0)
+      pleins.boite(q[0], 1.0, q[1], L * 0.9, 4.2, 10.4, ang, coque, fois(coque, 0.6))
+      q = Q(L * 0.47, 0)
+      pleins.boite(q[0], 1.3, q[1], L * 0.1, 3.6, 6.6, ang, coque, fois(coque, 0.6)) // l'étrave
+      q = Q(-L * 0.04, 0)
+      pleins.boite(q[0], 3.15, q[1], L * 0.9, 0.12, 10.5, ang, lin('#5d4c42')) // le pont, et ses panneaux de cale
+      for (const t of [-0.22, 0.05, 0.32]) {
+        q = Q(L * t, 0)
+        pleins.boite(q[0], 3.45, q[1], L * 0.2, 0.5, 7.6, ang, lin('#7f6250'))
+      }
+      // le château, à l'arrière
+      q = Q(-L * 0.38, 0)
+      pleins.boite(q[0], 7.4, q[1], 8.5, 8.4, 9.6, ang, blanc, fois(blanc, 0.8))
+      pleins.boite(q[0], 10.9, q[1], 8.7, 0.9, 9.8, ang, lin('#2b3540'))
+      q = Q(-L * 0.43, 0)
+      pleins.boite(q[0], 13.2, q[1], 2.2, 3.4, 2.4, ang, lin('#c94a32'))
+      // deux grues de bord
+      for (const t of [-0.1, 0.22]) {
+        q = Q(L * t, 0)
+        pleins.boite(q[0], 8.4, q[1], 0.8, 10.4, 0.8, ang, blanc, fois(blanc, 0.8))
+        q = Q(L * t, -3.2)
+        pleins.boite(q[0], 13.1, q[1], 0.5, 0.5, 7.4, ang, blanc)
       }
     }
   }

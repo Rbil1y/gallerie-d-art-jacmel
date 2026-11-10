@@ -118,7 +118,7 @@ export function Fermeture() {
               <a className="link" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer license">
                 © contributeurs OpenStreetMap
               </a>{' '}
-              (ODbL). Matériaux et couleurs de la Douane, de l’ancien bureau du port et de la rue du Commerce relevés sur des photographies de Wikimedia Commons (Kitanago, Nyou9117, Caribeanvybz, 2021-2024), utilisées comme références.
+              (ODbL). Matériaux et couleurs de la Douane, de l’ancien bureau du port et de la rue du Commerce relevés sur des photographies de Wikimedia Commons (Kitanago, Nyou9117, Caribeanvybz, 2021-2024) ; toitures, wharf et Marché en fer d’après les vidéos de Wilaventure (vol de drone, octobre 2026) et de RTG 18 (janvier 2025). Toutes utilisées comme références, rien n’en est reproduit.
             </p>
             <h2 className="label">Typographies</h2>
             <p className="ui">Newsreader (Production Type), Hanken Grotesk (Alfredo Marco Pradil), Besley (Owen Earl) — SIL Open Font License.</p>

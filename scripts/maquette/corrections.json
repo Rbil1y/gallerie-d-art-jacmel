@@ -4,9 +4,9 @@
     "48382177": {
       "nom": "Douane de Jacmel : enceinte et grand hangar (2 152 m² sur OSM)",
       "toit": "tôle en croupe",
-      "couleurToit": "#3f9a86",
-      "source": "Wikimedia Commons, « Warf touristique.jpg », Kitanago, CC BY-SA 4.0 : grand hangar au toit de tôle verte, entre la ville et le wharf",
-      "date": "2021-04-16",
+      "couleurToit": "#4a9891",
+      "source": "Wikimedia Commons, « Warf touristique.jpg », Kitanago, CC BY-SA 4.0 (2021, vert d'eau) ; vol de drone YouTube Rj2wOofP-wE, Wilaventure, 16 octobre 2026, vers 6:30 (bleu-vert vif)",
+      "date": "2026-10-16",
       "statut": "supposé",
       "note": "Le bâtiment Art déco de 1934 (murs crème, bandeaux rouges, toit-terrasse, fronton « 1934 DOUANE ») n'est pas tracé à part sur OSM : à placer quand sa position sera connue."
     },
@@ -24,8 +24,13 @@
     },
     "48565008": {
       "nom": "Marché en fer",
-      "source": "à choisir : état avant ou après l'incendie de janvier 2025",
-      "statut": "en attente"
+      "forme": "brule",
+      "toit": "moitié couverte (tôle rouillée, pignon brun sous échafaudage), moitié réduite à sa charpente noircie",
+      "murs": "colonnes de fonte vert-bleu rouillées, bardage de tôle clair ; plus d’étals",
+      "source": "Vidéo YouTube 0H9yrbqIQr4 (RTG 18, « Ancien Marché en Fer de Jacmel », 21 janvier 2025), planches de vignettes",
+      "date": "2025-01-21",
+      "statut": "supposé",
+      "note": "État de janvier 2025, le plus récent trouvé : rien ne montre ce qui a été déblayé ou restauré depuis. Quelle moitié a brûlé, par rapport au plan, n'est pas lisible dans la vidéo."
     }
   },
   "rues": {
@@ -46,5 +51,17 @@
       "statut": "vérifié",
       "note": "Hors du socle actuel de la maquette (comme l'hôtel de ville) : sans effet tant que le cadre ne l'inclut pas."
     }
+  },
+  "flotte": {
+    "cargo au wharf": {
+      "description": "cargo à coque rouge, château blanc à l’arrière, deux grues de bord, amarré le long du wharf",
+      "source": "Vol de drone YouTube Rj2wOofP-wE, Wilaventure, 16 octobre 2026, 0:10 à 1:30 ; présent aussi sur « Warf touristique.jpg » (2021)",
+      "statut": "vérifié (présence), supposé (côté du quai et dimensions)"
+    }
+  },
+  "toitures": {
+    "observation": "vu du ciel, la tôle grise domine, puis la rouge et la terre cuite ; quelques toits bleus ; beaucoup de toits-terrasses blancs",
+    "source": "Vol de drone YouTube Rj2wOofP-wE, Wilaventure, 16 octobre 2026, 1:30 à 14:00",
+    "statut": "vérifié pour l’ensemble ; chaque maison reste tirée au hasard dans ces proportions"
   }
 }

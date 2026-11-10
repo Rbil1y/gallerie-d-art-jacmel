@@ -13,6 +13,8 @@ const ROOT = join(ICI, '..', '..')
 const CACHE = join(ROOT, 'node_modules', '.cache', 'gallerie')
 const OSM = join(CACHE, 'osm-jacmel.json')
 const OUT = join(ROOT, 'public', 'maquette')
+// corrections par identifiant OSM, avec leur source et leur statut (vérifié, supposé, en attente)
+const CORR = JSON.parse(readFileSync(join(ICI, 'corrections.json'), 'utf8'))
 mkdirSync(OUT, { recursive: true })
 
 // La maison : mêmes coordonnées que la fiche du site. Le cadre : Marché en fer, rue du Commerce, Douane, wharf, baie.
@@ -212,6 +214,8 @@ const rasNobles = await raster(rues.filter(r => NOBLES.test(r.nom)).map(r => tra
 const polys = f => elements.filter(f).map(e => `<path d="${chemin(trace(e), true)}" fill="#fff"/>`).join('')
 const rasPlage = await raster(polys(e => e.tags.natural === 'beach' || e.tags.natural === 'sand'))
 const rasParc = await raster(polys(e => e.tags.leisure === 'park' || e.tags.leisure === 'pitch' || e.tags.landuse === 'grass' || e.tags.landuse === 'cemetery'))
+const rasPlace = await raster(polys(e => CORR.sols[e.id]?.sol === 'terre-cuite'))
+const rasGris = await raster(rues.filter(r => CORR.rues[r.id]?.pave === 'gris').map(r => trait(r.p, r.l, 255)).join(''))
 // ---------- les maisons ----------
 const aire = p => {
   let s = 0
@@ -275,6 +279,16 @@ for (const e of elements.filter(e => e.tags.building)) {
   maisons.push({ p: p.map(q => [+q[0].toFixed(2), +q[1].toFixed(2)]), c: [+cx.toFixed(2), +cz.toFixed(2)], s: +surface.toFixed(1), e: etages, r: +r.toFixed(4), n: noble ? 1 : 0, t: type, f: surRue, id: e.id })
 }
 
+// corrections relevées sur les sources (scripts/maquette/corrections.json)
+for (const m of maisons) {
+  const c = CORR.batiments[m.id]
+  if (!c || c.statut === 'en attente') continue
+  if (c.etages) m.e = c.etages
+  if (c.toit === 'terrasse') m.tp = 1
+  if (c.murs) m.mc = c.murs
+  if (c.couleurToit) m.tc = c.couleurToit
+  if (c.forme) m.fo = c.forme
+}
 const empreintes = maisons.map(m => `<path d="${chemin(m.p, true)}" fill="#fff"/>`).join('')
 const rasBati = await raster(empreintes)
 const ao1 = await sharp(rasBati, { raw: { width: M, height: M, channels: 1 } }).blur(1.3 * PX).greyscale().raw().toBuffer()
@@ -294,7 +308,8 @@ for (let i = 0; i < 12000; i++) {
   const t = r()
   const u = r()
   if (s > -3 || !libre(q) || plage(q)) continue
-  const dens = (parc(q) ? 0.26 : s > -46 ? 0.022 : 0.07) * (procheNoble(q[0], q[1]) ? 0.3 : 1)
+  // sur la place dallée, les arbres se tiennent au bord : peu au milieu
+  const dens = (rasPlace[indice(q)] > 128 ? 0.05 : parc(q) ? 0.26 : s > -46 ? 0.022 : 0.07) * (procheNoble(q[0], q[1]) ? 0.3 : 1)
   if (t < dens * 0.3) palmiers.push([+q[0].toFixed(1), +q[1].toFixed(1), +(u * 6.28).toFixed(2), +(0.8 + hache(i) * 0.5).toFixed(2)])
   else if (t < dens) arbres.push([+q[0].toFixed(1), +q[1].toFixed(1), +(2.2 + u * u * 3.2).toFixed(2), +hache(i, 2).toFixed(3)])
 }
@@ -464,9 +479,13 @@ if (!process.env.SANS_SOL) {
   const CHAUS = hex('#aba08e')
   const BRIQUE = hex('#a8704f')
   const BRIQUE2 = hex('#8f5c44')
+  const PIERRE = hex('#9b968c')
+  const PIERRE2 = hex('#7d786f')
+  const TERRECUITE = hex('#b77565')
+  const TERRECUITE2 = hex('#c58a77')
   // masques adoucis : ils servent de couverture pour peindre le sol, sans déplacer aucun objet
   const adoucir = b => sharp(b, { raw: { width: M, height: M, channels: 1 } }).blur(0.7).greyscale().raw().toBuffer()
-  const [solRues, solNobles, solPlage, solParc] = await Promise.all([rasRues, rasNobles, rasPlage, rasParc].map(adoucir))
+  const [solRues, solNobles, solPlage, solParc, solPlace, solGris] = await Promise.all([rasRues, rasNobles, rasPlage, rasParc, rasPlace, rasGris].map(adoucir))
   for (let y = 0; y < M; y++) {
     for (let x = 0; x < M; x++) {
       const i = y * M + x
@@ -502,6 +521,13 @@ if (!process.env.SANS_SOL) {
         rg = 1
         const wParc = solParc[i] / 255
         if (wParc > 0) poser(mix(GAZON, HERBE, smooth(-0.3, 0.4, wear + fine * 0.3)), fine * 0.9, 1, wParc)
+        // la place : un grand dallage de terre cuite
+        const wPlace = solPlace[i] / 255
+        if (wPlace > 0) {
+          const dal = Math.min(Math.abs((wz * 1.6) % 1), Math.abs((wx * 1.6) % 1))
+          const teinte = hache(Math.floor(wx * 1.6), Math.floor(wz * 1.6))
+          poser(mix(mix(TERRECUITE, TERRECUITE2, smooth(-0.3, 0.4, wear) * 0.6 + teinte * 0.25), [146, 104, 92], smooth(0.07, 0.02, dal) * 0.4), 0.45 + smooth(0.02, 0.08, dal) * 0.2, 0.86, wPlace)
+        }
         const wPlage = solPlage[i] / 255
         if (wPlage > 0) poser(mix(SABLE, SABLE2, smooth(-0.3, 0.3, wear + fine * 0.2) * smooth(16, 2, -s + 8)), fine * 0.5, 0.9, wPlage)
         // le trottoir vaut 130 dans le masque des rues, la chaussée 255
@@ -522,7 +548,9 @@ if (!process.env.SANS_SOL) {
             const lig = Math.floor(wz * 1.05)
             const col = Math.floor(wx * 0.62 + (lig % 2) * 0.5)
             const joint = Math.min(Math.abs((wz * 1.05) % 1), Math.abs((wx * 0.62 + (lig % 2) * 0.5) % 1))
-            cr = mix(cr, mix(mix(BRIQUE, BRIQUE2, hache(col, lig)), [70, 58, 48], smooth(0.1, 0.02, joint) * 0.55), wNoble)
+            // la rue du Commerce est pavée de pierre grise ; les autres rues nobles gardent leurs pavés de brique
+            const wGris = solGris[i] / 255
+            cr = mix(cr, mix(mix(mix(BRIQUE, PIERRE, wGris), mix(BRIQUE2, PIERRE2, wGris), hache(col, lig)), [70, 64, 58], smooth(0.1, 0.02, joint) * 0.55), wNoble)
             hr = lerp(hr, -0.5 + smooth(0.02, 0.14, joint) * 1.1, wNoble)
           }
           poser(cr, hr, 0.82, wRue)

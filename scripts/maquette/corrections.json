@@ -1,0 +1,50 @@
+{
+  "_lisezmoi": "Corrections de la maquette, par identifiant OpenStreetMap (way). Appliquées par construire.mjs. statut : « vérifié » = vu sur la source citée ; « supposé » = déduit, à confirmer ; « en attente » = décision ou source manquante. Les sources servent de référence visuelle uniquement : aucune image n'est publiée ni copiée dans les textures.",
+  "batiments": {
+    "48382177": {
+      "nom": "Douane de Jacmel : enceinte et grand hangar (2 152 m² sur OSM)",
+      "toit": "tôle en croupe",
+      "couleurToit": "#3f9a86",
+      "source": "Wikimedia Commons, « Warf touristique.jpg », Kitanago, CC BY-SA 4.0 : grand hangar au toit de tôle verte, entre la ville et le wharf",
+      "date": "2021-04-16",
+      "statut": "supposé",
+      "note": "Le bâtiment Art déco de 1934 (murs crème, bandeaux rouges, toit-terrasse, fronton « 1934 DOUANE ») n'est pas tracé à part sur OSM : à placer quand sa position sera connue."
+    },
+    "48382324": {
+      "nom": "Ancien bâtiment du Bureau de Port (Sant d'a Jakmel)",
+      "etages": 2,
+      "toit": "terrasse",
+      "murs": "#c9b591",
+      "forme": "pierre",
+      "balcons": "aucun ; baies cintrées à volets bleus",
+      "source": "Wikimedia Commons, « Vue aérienne de la douane de Jacmel.jpg », Nyou9117, CC BY-SA 4.0 : bâtiment de pierre à baies cintrées près de la Douane",
+      "date": "2021-04-10",
+      "statut": "supposé",
+      "note": "Identification par la note OSM « Ancien bâtiment du Bureau de Port », pas par la position."
+    },
+    "48565008": {
+      "nom": "Marché en fer",
+      "source": "à choisir : état avant ou après l'incendie de janvier 2025",
+      "statut": "en attente"
+    }
+  },
+  "rues": {
+    "48296365": {
+      "nom": "Rue du Commerce",
+      "pave": "gris",
+      "source": "Wikimedia Commons, « Rue du Commerce à Jacmel.jpg », Caribeanvybz, CC BY-SA 4.0",
+      "date": "2024-08-23",
+      "statut": "vérifié"
+    }
+  },
+  "sols": {
+    "48359802": {
+      "nom": "Place Toussaint-Louverture (Place d'Armes sur OSM)",
+      "sol": "terre-cuite",
+      "source": "Wikimedia Commons, « Vue de la Place Toussaint Louverture de Jacmel.jpg », Caribeanvybz, CC BY 4.0",
+      "date": "2024-08-23",
+      "statut": "vérifié",
+      "note": "Hors du socle actuel de la maquette (comme l'hôtel de ville) : sans effet tant que le cadre ne l'inclut pas."
+    }
+  }
+}

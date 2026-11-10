@@ -4,7 +4,8 @@ import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
 type P2 = [number, number]
-type Maison = { p: P2[]; c: P2; s: number; e: number; r: number; n: number; t: number; f: number[]; id: number; g?: number }
+/** tp : toit-terrasse imposé ; mc : couleur des murs ; tc : couleur de la tôle ; fo : forme particulière (scripts/maquette/corrections.json) */
+type Maison = { p: P2[]; c: P2; s: number; e: number; r: number; n: number; t: number; f: number[]; id: number; g?: number; tp?: number; mc?: string; tc?: string; fo?: string }
 type Donnees = {
   B: number
   SMAX: number
@@ -329,7 +330,8 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     const hMurs = H * m.e
     const R = rectangle(m.p)
     const rectangulaire = m.s / (4 * R.hl * R.hw) > 0.8 && R.hl < 44
-    const pente = rectangulaire && (m.n || m.t > 1 || r2 > 0.3)
+    const pente = rectangulaire && !m.tp && (m.n || m.t > 1 || r2 > 0.3)
+    const teinteMur = m.mc ? lin(m.mc) : BLANC
     const hPar = pente ? 0 : 0.55
 
     for (let i = 0; i < n; i++) {
@@ -352,7 +354,9 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
           const b: P2 = [A[0] + (Bq[0] - A[0]) * t0, A[1] + (Bq[1] - A[1]) * t0]
           const h1 = hache(m.id % 3571, j * 7 + k * 13 + i)
           let t: [number, number, number, number]
-          if (m.g) {
+          if (m.fo === 'pierre') {
+            t = k === 0 ? tuile(1, 7) : tuile(7, 3)
+          } else if (m.g) {
             t = k === 0 ? (j === Math.floor(nb / 2) && rue ? tuile(6, 7) : tuile(7, rue ? 1 : 4)) : rue ? tuile(7, 7) : tuile(7, 3)
           } else if (m.t === 2) {
             t = k === 0 ? tuile(1, 7) : tuile(7, 3)
@@ -369,15 +373,15 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
             t = L > 9 && !m.n && h1 < 0.05 ? tuile(5, 7) : h1 < 0.3 ? tuile(couleur, k === 0 ? 1 : 3) : tuile(couleur, 4)
           }
           const claire = 0.92 + hache(m.id % 811, 2) * 0.12
-          const bas = fois(BLANC, (k === 0 ? 0.74 : 0.92) * claire)
-          const haut = fois(BLANC, claire * (k === m.e - 1 ? 0.9 : 1))
+          const bas = fois(teinteMur, (k === 0 ? 0.74 : 0.92) * claire)
+          const haut = fois(teinteMur, claire * (k === m.e - 1 ? 0.9 : 1))
           facades.quad([a[0], yb, a[1]], [b[0], yb, b[1]], [b[0], yt, b[1]], [a[0], yt, a[1]], normale, t, bas, haut)
         }
       }
       if (hPar) {
         // acrotère du toit-terrasse
         const y1 = y0 + hMurs
-        const col = fois(lin('#c9c2b4'), 0.95)
+        const col = m.mc ? fois(teinteMur, 0.9) : fois(lin('#c9c2b4'), 0.95)
         pleins.quad([A[0], y1, A[1]], [Bq[0], y1, Bq[1]], [Bq[0], y1 + hPar, Bq[1]], [A[0], y1 + hPar, A[1]], normale, [0, 0, 1, 1], col)
       }
       // galeries à balcon : la signature de Jacmel
@@ -420,7 +424,7 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       const yR = yT + rise
       const hip = r2 > 0.42 || m.t > 1
       const Rl = hip ? Math.max(0.2, hl - hw * 0.85) : A
-      const tole = lin(m.g ? '#c9cac4' : TEINTES_TOLE[Math.floor(hache(m.id % 2003) * 8) % 8])
+      const tole = lin(m.g ? '#c9cac4' : (m.tc ?? TEINTES_TOLE[Math.floor(hache(m.id % 2003) * 8) % 8]))
       const sl = Math.hypot(W, rise) / 6.4
       const du = hache(m.id % 991, 1)
       const dv = hache(m.id % 991, 2)
@@ -480,12 +484,12 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
         betons.tri(A, Bv, Cv, uvm(A), uvm(Bv), uvm(Cv), col, col, col, [0, 1, 0])
       }
       // réservoir noir et fers en attente : le toit-terrasse haïtien
-      if (m.s > 45 && r2 < 0.55) {
+      if (!m.tp && m.s > 45 && r2 < 0.55) {
         const tx = m.c[0] + (r2 - 0.25) * R.hl * 0.9
         const tz = m.c[1] + (m.r - 0.5) * R.hw * 0.9
         pleins.boite(tx, yT + 0.86, tz, 1.5, 1.6, 1.5, r2 * 3, lin('#1f2226'))
       }
-      if (m.s > 40) for (const q of m.p.slice(0, 6)) pleins.boite(q[0] * 0.97 + m.c[0] * 0.03, yT + 0.9, q[1] * 0.97 + m.c[1] * 0.03, 0.09, 1.6, 0.09, 0, lin('#4a4038'))
+      if (!m.tp && m.s > 40) for (const q of m.p.slice(0, 6)) pleins.boite(q[0] * 0.97 + m.c[0] * 0.03, yT + 0.9, q[1] * 0.97 + m.c[1] * 0.03, 0.09, 1.6, 0.09, 0, lin('#4a4038'))
     }
   }
 
@@ -1065,7 +1069,8 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
         float coc = 1. - texture2D(n,vUv).r;
         vec4 c = texture2D(t,vUv);
         if (coc > .004) c = developpe(mix(lumiere(t,vUv), lumiere(b,vUv), coc));
-        gl_FragColor = vec4(srgb(c.rgb/max(c.a,1e-4))*c.a, c.a);
+        float a = clamp(c.a, 0., 1.);
+        gl_FragColor = vec4(min(srgb(c.rgb/max(a,1e-4))*a, vec3(a)), a); // jamais plus de couleur que d'opacité
       }`,
     depthTest: false,
     depthWrite: false,
@@ -1101,7 +1106,7 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     let x1 = -1
     let y0 = 1
     let y1 = -1
-    const h = (B / 2) * 1.2
+    const h = (B / 2) * 1.42 // tout le socle, et toute son ombre douce (1,38 B)
     for (const sx of [-1, 1])
       for (const sz of [-1, 1])
         for (const y of [-40, 24]) {
@@ -1128,6 +1133,13 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
     renderer.clear()
     renderer.render(scene, camera)
     for (const q of [j.a, j.b]) {
+      // effacées en entier : un effacement limité à la zone laisserait autour d'elle une image plus ancienne,
+      // que le bord du flou ferait reparaître comme un cadre
+      if (partiel) {
+        q.scissorTest = false
+        renderer.setRenderTarget(q)
+        renderer.clear()
+      }
       q.scissorTest = partiel
       q.scissor.set(zx >> 1, zy >> 1, (zw >> 1) + 2, (zh >> 1) + 2)
     }
@@ -1145,7 +1157,6 @@ export async function creerMaquette(canvas: HTMLCanvasElement, options: OptionsM
       flou.uniforms.t.value = source
       flou.uniforms.dir.value.set(px * cx, py * cy)
       renderer.setRenderTarget(sortie)
-      if (partiel) renderer.clear() // hors de la zone, rien : sinon une vieille image baverait sur le bord
       renderer.render(scenePost, camPost)
       source = sortie.texture
     }

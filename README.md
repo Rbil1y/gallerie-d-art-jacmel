@@ -7,7 +7,7 @@ Vite + React 19 + TypeScript, `motion` pour le mouvement, `lenis` pour le défil
 npm install
 npm run dev        # http://localhost:5173 (génère d’abord les images)
 npm test           # soleil, horaires, typographie
-npm run build      # build de production (base /gallerie-d-art-jacmel/ pour GitHub Pages)
+npm run build      # build de production (servi à la racine de galeridajakmel.aylab.co)
 ```
 
 ## Remplacer les photographies
